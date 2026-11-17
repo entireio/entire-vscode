@@ -7,7 +7,7 @@ const expected = JSON.parse(process.env.ENTIRE_TEST_EXPECT);
 
 suite(`Entire view state: ${expected.state}`, () => {
   test('settles in the expected state', async () => {
-    const api = await vscode.extensions.getExtension('entire.entire-vscode').activate();
+    const api = await vscode.extensions.getExtension('entire.entire').activate();
     const deadline = Date.now() + 30_000;
     while (api.manager.viewState === 'loading' && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));

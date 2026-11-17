@@ -64,7 +64,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: entire-vscode-vsix
-      - run: npx vsce publish --oidc --packagePath entire-vscode-*.vsix
+      - run: npx vsce publish --oidc --packagePath entire-*.vsix
 
   publish-open-vsx:
     needs: build
@@ -80,6 +80,6 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: entire-vscode-vsix
-      - run: npx ovsx publish entire-vscode-*.vsix
+      - run: npx ovsx publish entire-*.vsix
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}

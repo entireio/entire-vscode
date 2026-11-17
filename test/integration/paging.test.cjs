@@ -43,7 +43,7 @@ suite('Entire paging', () => {
   };
 
   suiteSetup(async () => {
-    api = await vscode.extensions.getExtension('entire.entire-vscode').activate();
+    api = await vscode.extensions.getExtension('entire.entire').activate();
     await until(() => api.manager.viewState === 'ready', 'the first load');
     paging = api.manager.repoFor(fixture.pagingRoot);
     deep = api.manager.repoFor(fixture.deepRoot);

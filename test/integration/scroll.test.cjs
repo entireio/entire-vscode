@@ -48,7 +48,7 @@ suite('Entire loading on scroll', () => {
   };
 
   suiteSetup(async () => {
-    api = await vscode.extensions.getExtension('entire.entire-vscode').activate();
+    api = await vscode.extensions.getExtension('entire.entire').activate();
     await until(() => api.manager.viewState === 'ready', 'the first load');
     scrolling = api.manager.repoFor(fixture.scrollRoot);
     sparse = api.manager.repoFor(fixture.sparseRoot);

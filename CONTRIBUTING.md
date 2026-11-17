@@ -60,8 +60,8 @@ The README links to them by relative path. `vsce` rewrites those links to this r
 A release is a tag. Pushing `v<version>` runs `.github/workflows/release.yml`, which builds the VSIX once and publishes that one file to the Visual Studio Marketplace and to Open VSX.
 
 1. Update `version` in `package.json` and add an entry to `CHANGELOG.md`.
-2. Run `npm run check`, `npm run test:host`, and `npm run package`. The last command writes `entire-vscode-<version>.vsix`.
-3. Install that file with `code --install-extension entire-vscode-<version>.vsix` and open a repository that has checkpoints.
+2. Run `npm run check`, `npm run test:host`, and `npm run package`. The last command writes `entire-<version>.vsix`.
+3. Install that file with `code --install-extension entire-<version>.vsix` and open a repository that has checkpoints.
 4. Commit, then tag and push the tag: `git tag v<version>` and `git push origin v<version>`.
 
 ### One-Time Setup
