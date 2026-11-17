@@ -1,0 +1,85 @@
+name: Release
+
+# Push a tag named v<version> to build the extension once and publish that one
+# file to the Visual Studio Marketplace and to Open VSX.
+#
+# Marketplace: GitHub Trusted Publishing, so no secret is stored. The publisher
+# needs a Trusted Publishing policy that names this repository, this workflow
+# file (release.yml), and the environment "marketplace".
+#
+# Open VSX: the OVSX_PAT secret, an access token from open-vsx.org.
+#
+# CONTRIBUTING.md has the one-time setup for both.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check that the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}." >&2
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run check
+      - run: npm run notices -- --check
+      - run: xvfb-run -a npm run test:host
+      - run: npm run package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: entire-vscode-vsix
+          path: '*.vsix'
+          if-no-files-found: error
+
+  publish-marketplace:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: marketplace
+    permissions:
+      contents: read
+      # Lets the job ask GitHub for the short-lived token that the Marketplace exchanges.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          name: entire-vscode-vsix
+      - run: npx vsce publish --oidc --packagePath entire-vscode-*.vsix
+
+  publish-open-vsx:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: open-vsx
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          name: entire-vscode-vsix
+      - run: npx ovsx publish entire-vscode-*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}

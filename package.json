@@ -1,0 +1,512 @@
+{
+  "name": "entire-vscode",
+  "displayName": "Entire",
+  "description": "Browse the Entire checkpoints behind your commits, the agent sessions behind each checkpoint, and the trails of repositories on entire.com.",
+  "version": "0.1.0",
+  "publisher": "entire",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/entireio/entire-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/entireio/entire-vscode/issues"
+  },
+  "homepage": "https://github.com/entireio/entire-vscode#readme",
+  "galleryBanner": {
+    "color": "#0B0B0C",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "entire",
+    "checkpoints",
+    "sessions",
+    "trails",
+    "agents",
+    "git"
+  ],
+  "icon": "media/icon.png",
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Entire runs Git and the Entire CLI in the workspace, so it needs a trusted workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Entire reads a local Git repository, which virtual workspaces do not provide."
+    }
+  },
+  "activationEvents": [
+    "onWebviewPanel:entire.detail",
+    "onWebviewPanel:entire.trail"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "entire",
+          "title": "Entire",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "entire": [
+        {
+          "id": "entire.checkpoints",
+          "name": "Checkpoints"
+        },
+        {
+          "id": "entire.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "entire.trails",
+          "name": "Trails",
+          "when": "entire.hasTrails"
+        },
+        {
+          "id": "entire.brain",
+          "name": "Brain",
+          "type": "webview",
+          "when": "entire.viewState == 'ready'",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "entire.checkpoints",
+        "contents": "Open a folder that contains a Git repository to see its checkpoints.\n[Open Folder](command:vscode.openFolder)",
+        "when": "entire.viewState == 'noFolder'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "Open a folder that contains a Git repository to see its sessions.\n[Open Folder](command:vscode.openFolder)",
+        "when": "entire.viewState == 'noFolder'"
+      },
+      {
+        "view": "entire.checkpoints",
+        "contents": "This folder is not a Git repository. Entire links checkpoints to Git commits.",
+        "when": "entire.viewState == 'notGit'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "This folder is not a Git repository.",
+        "when": "entire.viewState == 'notGit'"
+      },
+      {
+        "view": "entire.checkpoints",
+        "contents": "The Entire CLI is not installed, or it is not on your PATH. This extension reads checkpoints and sessions through it.\n[Install Entire CLI](command:entire.installCli)\n[Set Entire CLI Path](command:entire.setCliPath)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'cliMissing'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "The Entire CLI is not installed, or it is not on your PATH.\n[Install Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'cliMissing'"
+      },
+      {
+        "view": "entire.checkpoints",
+        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Update Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'cliTooOld'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Update Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'cliTooOld'"
+      },
+      {
+        "view": "entire.checkpoints",
+        "contents": "Entire is not enabled in this repository. Run \"entire enable\" in a terminal to start recording sessions.\n[Copy Command](command:entire.copyEnableCommand)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'notEnabled'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "Entire is not enabled in this repository.\n[Copy Command](command:entire.copyEnableCommand)\n[Retry](command:entire.refresh)",
+        "when": "entire.viewState == 'notEnabled'"
+      },
+      {
+        "view": "entire.checkpoints",
+        "contents": "No commits on this branch have checkpoints yet. Entire adds one when you commit work from an agent session.",
+        "when": "entire.viewState == 'ready'"
+      },
+      {
+        "view": "entire.sessions",
+        "contents": "No sessions found for this repository yet.",
+        "when": "entire.viewState == 'ready'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "Trails need a login to Entire. Run \"entire login\" in a terminal, then retry.\n[Copy Command](command:entire.copyLoginCommand)\n[Retry](command:entire.refresh)",
+        "when": "entire.trailsState == 'loggedOut'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "This repository's project is not on Entire, or your login cannot see it. Run \"entire auth status\" in a terminal to check which account is logged in.\n[Retry](command:entire.refresh)",
+        "when": "entire.trailsState == 'noAccess'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "Entire could not load the trails of this repository. The log has the details.\n[Retry](command:entire.refresh)\n[Show Log](command:entire.showLog)",
+        "when": "entire.trailsState == 'failed'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "No open trails touch this repository.\n[Change Filter](command:entire.filterTrails)",
+        "when": "entire.trailsState == 'empty' && entire.trailsFilter == 'open'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "No closed trails touch this repository.\n[Change Filter](command:entire.filterTrails)",
+        "when": "entire.trailsState == 'empty' && entire.trailsFilter == 'closed'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "No trails touch this repository.",
+        "when": "entire.trailsState == 'empty' && entire.trailsFilter == 'all'"
+      },
+      {
+        "view": "entire.trails",
+        "contents": "No open trails in this phase touch this repository.\n[Change Filter](command:entire.filterTrails)",
+        "when": "entire.trailsState == 'empty' && entire.trailsFilter =~ /^open:/"
+      }
+    ],
+    "commands": [
+      {
+        "command": "entire.refresh",
+        "title": "Refresh",
+        "category": "Entire",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "entire.openBrainGraph",
+        "title": "View Brain",
+        "category": "Entire",
+        "icon": {
+          "light": "media/brain-light.svg",
+          "dark": "media/brain-dark.svg"
+        }
+      },
+      {
+        "command": "entire.stopBrainGraph",
+        "title": "Stop Brain Graph",
+        "category": "Entire",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "entire.copyBrainInstallCommand",
+        "title": "Copy Brain Plugin Install Command",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyBrainSetupCommand",
+        "title": "Copy Brain Setup Command",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.openRepoOnWeb",
+        "title": "Open Repository on entire.com",
+        "category": "Entire",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "entire.setCliPath",
+        "title": "Set Entire CLI Path",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.installCli",
+        "title": "Install Entire CLI",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.showLog",
+        "title": "Show Log",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyEnableCommand",
+        "title": "Copy Enable Command",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyLoginCommand",
+        "title": "Copy Login Command",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.filterTrails",
+        "title": "Filter Trails",
+        "category": "Entire",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "entire.loadMore",
+        "title": "Load More",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.openDetail",
+        "title": "Open",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.openDetailInNewTab",
+        "title": "Open in New Tab",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.openOnWeb",
+        "title": "Open on entire.com",
+        "category": "Entire",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "entire.showCommitDiff",
+        "title": "Show Commit Diff",
+        "category": "Entire",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "entire.openRawTranscript",
+        "title": "Open Raw Transcript",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyCheckpointId",
+        "title": "Copy Checkpoint ID",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyCommitSha",
+        "title": "Copy Commit SHA",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copySessionId",
+        "title": "Copy Session ID",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.copyTrailLink",
+        "title": "Copy Trail Link",
+        "category": "Entire"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "entire.openBrainGraph",
+          "when": "view == entire.brain",
+          "group": "navigation@0"
+        },
+        {
+          "command": "entire.refresh",
+          "when": "view == entire.checkpoints || view == entire.sessions || view == entire.trails || view == entire.brain",
+          "group": "navigation@1"
+        },
+        {
+          "command": "entire.filterTrails",
+          "when": "view == entire.trails",
+          "group": "navigation@2"
+        },
+        {
+          "command": "entire.openRepoOnWeb",
+          "when": "(view == entire.checkpoints || view == entire.sessions || view == entire.trails) && entire.hasWebRepo",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "entire.openOnWeb",
+          "when": "viewItem =~ /\\bweb\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "entire.openDetailInNewTab",
+          "when": "viewItem =~ /\\bopenable\\b/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "entire.showCommitDiff",
+          "when": "viewItem =~ /\\bhasCommit\\b/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "entire.openOnWeb",
+          "when": "viewItem =~ /\\bweb\\b/",
+          "group": "1_open@3"
+        },
+        {
+          "command": "entire.openRawTranscript",
+          "when": "viewItem =~ /\\bhasTranscript\\b/",
+          "group": "1_open@4"
+        },
+        {
+          "command": "entire.copyCheckpointId",
+          "when": "viewItem =~ /\\bhasCheckpoint\\b/",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "entire.copyCommitSha",
+          "when": "viewItem =~ /\\bhasCommit\\b/",
+          "group": "2_copy@2"
+        },
+        {
+          "command": "entire.copySessionId",
+          "when": "viewItem =~ /\\bhasSession\\b/",
+          "group": "2_copy@3"
+        },
+        {
+          "command": "entire.copyTrailLink",
+          "when": "viewItem =~ /^trail\\b/",
+          "group": "2_copy@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "entire.openBrainGraph",
+          "when": "entire.viewState == 'ready'"
+        },
+        {
+          "command": "entire.stopBrainGraph",
+          "when": "entire.brainRunning"
+        },
+        {
+          "command": "entire.copyBrainInstallCommand",
+          "when": "false"
+        },
+        {
+          "command": "entire.copyBrainSetupCommand",
+          "when": "false"
+        },
+        {
+          "command": "entire.openRepoOnWeb",
+          "when": "entire.hasWebRepo"
+        },
+        {
+          "command": "entire.copyEnableCommand",
+          "when": "false"
+        },
+        {
+          "command": "entire.loadMore",
+          "when": "false"
+        },
+        {
+          "command": "entire.openDetail",
+          "when": "false"
+        },
+        {
+          "command": "entire.openDetailInNewTab",
+          "when": "false"
+        },
+        {
+          "command": "entire.openOnWeb",
+          "when": "false"
+        },
+        {
+          "command": "entire.showCommitDiff",
+          "when": "false"
+        },
+        {
+          "command": "entire.openRawTranscript",
+          "when": "false"
+        },
+        {
+          "command": "entire.copyCheckpointId",
+          "when": "false"
+        },
+        {
+          "command": "entire.copyCommitSha",
+          "when": "false"
+        },
+        {
+          "command": "entire.copySessionId",
+          "when": "false"
+        },
+        {
+          "command": "entire.copyLoginCommand",
+          "when": "false"
+        },
+        {
+          "command": "entire.copyTrailLink",
+          "when": "false"
+        },
+        {
+          "command": "entire.filterTrails",
+          "when": "entire.hasTrails"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Entire",
+      "properties": {
+        "entire.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to the Entire CLI binary. Leave empty to find `entire` on your `PATH` and in common install locations."
+        },
+        "entire.loadOnScroll": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Load the next 50 rows of a list when you scroll to its end. When off, click **Load More** to load them."
+        },
+        "entire.trails.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the Trails view for a repository whose `origin` remote uses the `entire://` scheme. Trails are read from Entire over the network, with the login that `entire login` saved. When off, the Trails view is hidden and the extension runs no `entire trail` command."
+        },
+        "entire.webBaseUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Base URL for links to the Entire web app. Leave empty to use `ENTIRE_WEB_BASE_URL` if it is set, and `https://entire.com` otherwise."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "test:host": "npm run build && vscode-test",
+    "smoke": "node scripts/smoke.mjs",
+    "notices": "node scripts/notices.mjs",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "1.95.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "dompurify": "^3.4.17",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "happy-dom": "^21.0.4",
+    "jsdom": "^31.0.1",
+    "markdown-it": "^15.0.3",
+    "ovsx": "^1.4.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
+  }
+}

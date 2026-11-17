@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint, type-check, and unit tests
+        run: npm run check
+      - name: Third-party notices are current
+        run: npm run notices -- --check
+      - name: Extension-host tests
+        run: xvfb-run -a npm run test:host
+      - name: Package
+        run: npm run package
+      - name: List packaged files
+        run: npx vsce ls --no-dependencies
+      - uses: actions/upload-artifact@v7
+        with:
+          name: entire-vscode-vsix
+          path: '*.vsix'
+          if-no-files-found: error

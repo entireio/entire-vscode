@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+// A stand-in for the Entire CLI. It replays canned output so tests run with
+// no Entire install, and it records every invocation so tests can assert
+// which commands the extension ran.
+//
+// FAKE_ENTIRE_SCENARIO  Path to a JSON file: { "<argv joined by spaces>": Reply }.
+//                       A key ending in " *" matches any arguments after it.
+//                       Reply: { stdout?, stderr?, exitCode?, delayMs?, hang?, repeat? }
+//                       `repeat: { text, times }` prints `text` that many times, for
+//                       output too large to keep in a scenario file.
+//                       `hang` keeps the program running until it is killed. It prints
+//                       its `stdout` and `stderr` first, as a server prints its address.
+// FAKE_ENTIRE_LOG       Optional path. Each invocation appends its argv as a JSON line.
+const fs = require('node:fs');
+
+const args = process.argv.slice(2);
+const key = args.join(' ');
+
+if (process.env.FAKE_ENTIRE_LOG) {
+  fs.appendFileSync(process.env.FAKE_ENTIRE_LOG, `${JSON.stringify(args)}\n`);
+}
+
+let scenario = {};
+try {
+  scenario = JSON.parse(fs.readFileSync(process.env.FAKE_ENTIRE_SCENARIO ?? '', 'utf8'));
+} catch {
+  process.stderr.write('fake entire: FAKE_ENTIRE_SCENARIO is missing or is not JSON\n');
+  process.exit(3);
+}
+
+function find() {
+  if (Object.hasOwn(scenario, key)) return scenario[key];
+  let best;
+  for (const [pattern, reply] of Object.entries(scenario)) {
+    if (!pattern.endsWith(' *')) continue;
+    const prefix = pattern.slice(0, -1);
+    if (key.startsWith(prefix) && (!best || prefix.length > best.prefix.length)) best = { prefix, reply };
+  }
+  return best?.reply;
+}
+
+const reply = find();
+if (!reply) {
+  process.stderr.write(`fake entire: no reply for "${key}"\n`);
+  process.exit(2);
+}
+
+function finish() {
+  if (reply.stderr) process.stderr.write(reply.stderr);
+  if (reply.stdout) process.stdout.write(reply.stdout);
+  if (reply.repeat) {
+    const { text, times } = reply.repeat;
+    let written = 0;
+    // Wait for the reader when it falls behind, as a real program's writes do.
+    const pump = () => {
+      while (written < times) {
+        written += 1;
+        if (!process.stdout.write(text)) {
+          process.stdout.once('drain', pump);
+          return;
+        }
+      }
+    };
+    pump();
+  }
+  process.exitCode = reply.exitCode ?? 0;
+}
+
+if (reply.hang) {
+  if (reply.stderr) process.stderr.write(reply.stderr);
+  if (reply.stdout) process.stdout.write(reply.stdout);
+  setInterval(() => {}, 1000);
+} else if (reply.delayMs) setTimeout(finish, reply.delayMs);
+else finish();
