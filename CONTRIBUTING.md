@@ -57,7 +57,7 @@ The README links to them by relative path. `vsce` rewrites those links to this r
 
 ## Releasing
 
-A release is a tag. Pushing `v<version>` runs `.github/workflows/release.yml`, which builds the VSIX once and publishes that one file to the Visual Studio Marketplace and to Open VSX.
+A release is a tag. Pushing `v<version>` runs `.github/workflows/release.yml`, which builds the VSIX once and publishes that one file to the Visual Studio Marketplace, to Open VSX, and to a GitHub release for the tag. The release takes its notes from the version's entry in `CHANGELOG.md`, and its VSIX is the file to install by hand with Extensions: Install from VSIX.
 
 1. Update `version` in `package.json` and add an entry to `CHANGELOG.md`.
 2. Run `npm run check`, `npm run test:host`, and `npm run package`. The last command writes `entire-<version>.vsix`.
