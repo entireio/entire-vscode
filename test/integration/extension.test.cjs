@@ -42,7 +42,7 @@ suite('Entire extension', () => {
   let repo;
 
   suiteSetup(async () => {
-    const extension = vscode.extensions.getExtension('entire.entire-vscode');
+    const extension = vscode.extensions.getExtension('entire.entire');
     assert.ok(extension, 'the extension is installed in the test host');
     api = await extension.activate();
     await until(() => api.manager.viewState === 'ready', 'the first load').catch((error) => {

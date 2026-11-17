@@ -64,7 +64,7 @@ suite('Entire trails', () => {
   const reply = (changes) => fs.writeFileSync(fixture.scenarioFile, JSON.stringify({ ...fixture.scenario, ...changes }));
 
   suiteSetup(async () => {
-    const extension = vscode.extensions.getExtension('entire.entire-vscode');
+    const extension = vscode.extensions.getExtension('entire.entire');
     assert.ok(extension, 'the extension is installed in the test host');
     api = await extension.activate();
     await until(() => api.manager.viewState === 'ready', 'the first load');

@@ -74,7 +74,7 @@ suite('Entire brain', () => {
   };
 
   suiteSetup(async () => {
-    const extension = vscode.extensions.getExtension('entire.entire-vscode');
+    const extension = vscode.extensions.getExtension('entire.entire');
     assert.ok(extension, 'the extension is installed in the test host');
     manifest = extension.packageJSON.contributes;
     api = await extension.activate();
@@ -362,7 +362,7 @@ suite('Entire brain', () => {
   });
 
   test('ships the icon of its button, for light and for dark themes', () => {
-    const extension = vscode.extensions.getExtension('entire.entire-vscode');
+    const extension = vscode.extensions.getExtension('entire.entire');
     const command = manifest.commands.find((entry) => entry.command === 'entire.openBrainGraph');
     // The editor's own icon set has no brain, so the extension brings one as two files.
     assert.deepEqual(Object.keys(command.icon).sort(), ['dark', 'light']);

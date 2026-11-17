@@ -1,5 +1,5 @@
 {
-  "name": "entire-vscode",
+  "name": "entire",
   "displayName": "Entire",
   "description": "Browse the Entire checkpoints behind your commits, the agent sessions behind each checkpoint, and the trails of repositories on entire.com.",
   "version": "0.1.0",
