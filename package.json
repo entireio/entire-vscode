@@ -2,7 +2,7 @@
   "name": "entire",
   "displayName": "Entire for VS Code",
   "description": "Browse the Entire checkpoints behind your commits, the agent sessions behind each checkpoint, and the trails of repositories on entire.com.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "entire",
   "license": "MIT",
   "private": true,
@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/entireio/entire-vscode/issues"
   },
-  "homepage": "https://github.com/entireio/entire-vscode#readme",
+  "homepage": "https://entire.com",
   "galleryBanner": {
     "color": "#0B0B0C",
     "theme": "dark"
