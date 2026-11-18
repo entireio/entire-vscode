@@ -339,6 +339,15 @@ describe('isPluginMissing', () => {
   ])('does not take %s for a missing plugin', (_label, output) => {
     expect(isPluginMissing(output)).toBe(false);
   });
+
+  it('recognizes the Graph plugin by its own name, and not by the Brain plugin', () => {
+    const graphMissing = 'Error: Invalid usage: unknown command "graph" for "entire"\n';
+    expect(isPluginMissing(graphMissing, 'graph')).toBe(true);
+    expect(isPluginMissing(graphMissing, 'brain')).toBe(false);
+    expect(isPluginMissing("run 'entire plugin install graph' and retry", 'graph')).toBe(true);
+    expect(isPluginMissing('Error: Invalid usage: unknown command "graphs" for "entire"', 'graph')).toBe(false);
+    expect(isPluginMissing('Error: Invalid usage: unknown command "brain" for "entire"', 'graph')).toBe(false);
+  });
 });
 
 describe('BRAIN_VIZ_ARGS', () => {

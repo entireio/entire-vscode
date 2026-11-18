@@ -11,6 +11,13 @@ export function isCommitSha(value: string): boolean {
   return /^[0-9a-f]{40}$/.test(value) || /^[0-9a-f]{64}$/.test(value);
 }
 
+/** Session IDs come from agents: UUIDs, ULIDs, or `ses_...`. Never a flag. */
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+export function isSessionId(value: string): boolean {
+  return SESSION_ID.test(value);
+}
+
 /**
  * The Entire CLI's own pattern for a checkpoint link (`trailers.go`): the key
  * anywhere in the message, one ID, then whitespace or the end.

@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
+import { readSearchScope, type SearchScope } from '../core/search';
 import type { Actions } from './actions';
 import type { BrainOutcome, BrainService } from './brainService';
 import type { PanelManager } from './panel/panelManager';
+import type { SearchPicker } from './searchPicker';
+import type { SetupService } from './setupService';
+import { SETUP_VIEW_ID } from './views/setupView';
 import {
   readTrailFilter,
   trailFilterKey,
@@ -13,8 +17,6 @@ import {
 import type { RepoContext, RepoManager } from './repoManager';
 import { detailTarget, detailViewOf, nodeFacts, trailTarget, type DetailView, type Node } from './views/nodes';
 
-const INSTALL_URL = 'https://docs.entire.io/installation';
-
 function isNode(value: unknown): value is Node {
   return typeof value === 'object' && value !== null && typeof (value as { kind?: unknown }).kind === 'string';
 }
@@ -25,6 +27,8 @@ export function registerCommands(
   actions: Actions,
   log: vscode.LogOutputChannel,
   brain: BrainService,
+  setup: SetupService,
+  search: SearchPicker,
 ): vscode.Disposable[] {
   /** Registers a command that acts on a tree row and ignores calls without one. */
   const onNode = (command: string, handler: (node: Node) => unknown): vscode.Disposable =>
@@ -62,24 +66,27 @@ export function registerCommands(
 
   /**
    * Says why the brain graph did not open. Installing the plugin and
-   * building a brain are the user's to do, in a terminal, so the message
-   * hands over the command and the extension runs neither.
+   * building a brain run in a terminal, where the user sees them, and only
+   * when the user asks: the message offers to run the command, or to copy it.
    */
-  const reportBrain = (outcome: BrainOutcome): void => {
-    const offer = (message: string, command: string): void => {
-      void vscode.window.showInformationMessage(message, 'Copy Command').then((choice) => {
-        if (choice === 'Copy Command') void actions.copy(command, command);
+  const reportBrain = (outcome: BrainOutcome, root: string): void => {
+    const offer = (message: string, command: string, action: 'installBrain' | 'setupBrain'): void => {
+      void vscode.window.showInformationMessage(message, 'Run in Terminal', 'Copy Command').then((choice) => {
+        if (choice === 'Run in Terminal') void setup.runStep(root, action);
+        else if (choice === 'Copy Command') void actions.copy(command, command);
       });
     };
     if (outcome.kind === 'pluginMissing') {
       offer(
         'The brain graph needs the entire-brain plugin. Run "entire plugin install brain" in a terminal, then try again.',
         'entire plugin install brain',
+        'installBrain',
       );
     } else if (outcome.kind === 'noBrain') {
       offer(
         'This repository has no brain yet. Run "entire brain setup" in a terminal to build one, then try again.',
         'entire brain setup',
+        'setupBrain',
       );
     } else if (outcome.kind === 'failed') {
       void vscode.window.showErrorMessage(outcome.message, 'Show Log').then((choice) => {
@@ -136,6 +143,19 @@ export function registerCommands(
     });
   };
 
+  /** Opens the search, or says what has to be set up before there is anything to search. */
+  const openSearch = async (scope?: SearchScope): Promise<void> => {
+    // The command can be what starts the extension, so the first load may still be under way.
+    await manager.whenLoaded();
+    const searchable = manager.viewState === 'ready' || (scope !== 'checkpoints' && scope !== 'sessions' && manager.trailRepos.length > 0);
+    if (searchable) {
+      search.show(scope);
+      return;
+    }
+    const choice = await vscode.window.showInformationMessage('Entire is not set up in an open repository yet.', 'Set Up Entire');
+    if (choice === 'Set Up Entire') await vscode.commands.executeCommand('entire.openSetup');
+  };
+
   return [
     vscode.commands.registerCommand('entire.refresh', () => {
       // The brain's report is read on request, like the trails. A refresh reads again what has been read.
@@ -171,7 +191,7 @@ export function registerCommands(
             },
           )
         : await brain.open(repo);
-      reportBrain(outcome);
+      reportBrain(outcome, repo.root);
       return outcome;
     }),
 
@@ -180,7 +200,7 @@ export function registerCommands(
       brain.stop(typeof root === 'string' ? root : undefined);
     }),
 
-    // Installing the plugin and building a brain are the user's to do, in a terminal.
+    // The commands that set up the brain, for those who would rather run them themselves.
     vscode.commands.registerCommand('entire.copyBrainInstallCommand', () =>
       actions.copy('entire plugin install brain', 'entire plugin install brain'),
     ),
@@ -197,14 +217,35 @@ export function registerCommands(
       await vscode.workspace.getConfiguration('entire').update('cliPath', file.fsPath, vscode.ConfigurationTarget.Global);
     }),
 
-    vscode.commands.registerCommand('entire.installCli', () => vscode.env.openExternal(vscode.Uri.parse(INSTALL_URL))),
+    // Asks how to install the CLI, then runs that in a terminal.
+    vscode.commands.registerCommand('entire.installCli', () => setup.runStep(null, 'installCli')),
 
     vscode.commands.registerCommand('entire.showLog', () => log.show()),
 
     vscode.commands.registerCommand('entire.copyEnableCommand', () => actions.copy('entire enable', 'entire enable')),
 
-    // Logging in is the user's to do, in a terminal. The extension only hands over the command.
     vscode.commands.registerCommand('entire.copyLoginCommand', () => actions.copy('entire login', 'entire login')),
+
+    // Shows the Setup view, and keeps it in the sidebar until it is hidden.
+    vscode.commands.registerCommand('entire.openSetup', async () => {
+      await setup.pin();
+      try {
+        await vscode.commands.executeCommand(`${SETUP_VIEW_ID}.focus`);
+      } catch {
+        // The view is not there yet: the editor shows it once it has the context key.
+      }
+    }),
+
+    // The Setup view's buttons pass the repository, or null for a step of the machine, and the action.
+    vscode.commands.registerCommand('entire.runSetupStep', (root?: unknown, action?: unknown) => setup.runStep(root, action)),
+    vscode.commands.registerCommand('entire.checkSetup', () => setup.check()),
+    vscode.commands.registerCommand('entire.hideSetup', () => setup.hide()),
+
+    // With a scope as the argument, the search covers only that kind. Each view's button passes its own.
+    vscode.commands.registerCommand('entire.search', (scope?: unknown) => openSearch(readSearchScope(scope))),
+    vscode.commands.registerCommand('entire.searchCheckpoints', () => openSearch('checkpoints')),
+    vscode.commands.registerCommand('entire.searchSessions', () => openSearch('sessions')),
+    vscode.commands.registerCommand('entire.searchTrails', () => openSearch('trails')),
 
     // With a filter's key as the argument, the command applies it. With none, it asks.
     vscode.commands.registerCommand('entire.filterTrails', async (key?: unknown) => {

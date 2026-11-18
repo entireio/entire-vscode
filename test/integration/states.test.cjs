@@ -38,6 +38,16 @@ suite(`Entire view state: ${expected.state}`, () => {
       api.manager.viewState === 'ready' ? api.manager.enabledRepos.map((repo) => [repo.root, 'loading', 0]) : [],
     );
 
+    // The Setup view shows itself while Entire needs a step, and reads nothing
+    // until it is on screen: the login check asks entire.io, and the plugin
+    // checks run plugins that may not be installed.
+    assert.equal(api.setup.showSetup, ['cliMissing', 'cliTooOld', 'notEnabled'].includes(expected.state));
+    assert.equal(api.setup.pinned, false);
+    assert.equal(api.setupView.visible, false);
+    assert.equal(api.setupView.html, '');
+    assert.equal(api.setup.machineFacts().login, undefined);
+    assert.equal(api.setup.machineFacts().graphPlugin, undefined);
+
     const checkpoints = await api.checkpointsTree.getChildren();
     const sessions = await api.sessionsTree.getChildren();
     if (expected.state !== 'ready') {

@@ -257,17 +257,19 @@ suite('Entire brain', () => {
     assert.equal(lines().length, 9);
   });
 
-  test('says what to run when the repository has no brain, and copies the command', async () => {
+  test('says what to run when the repository has no brain, and offers to run or copy the command', async () => {
     reply({ [STATUS]: { stdout: JSON.stringify({ brain: { manifest_state: 'absent' } }) } });
     await refreshed('noBrain');
     assert.equal(section().state, 'noBrain');
     assert.deepEqual(lines(), []);
     assert.match(api.brainView.html, /This repository has no brain yet\. Run "entire brain setup" in a terminal/);
-    // The extension hands over the command. It does not build a brain.
+    // The command runs only as a Setup step, in a terminal, when asked. Nothing builds a brain until then.
     assert.deepEqual(links(), [
+      { label: 'Run in Terminal', command: 'entire.runSetupStep', args: [fixture.root, 'setupBrain'] },
       { label: 'Copy Command', command: 'entire.copyBrainSetupCommand' },
       { label: 'Retry', command: 'entire.refresh' },
     ]);
+    assert.deepEqual(calls('brain setup'), []);
     // Asking for the graph starts nothing either.
     const before = { viz: calls('brain viz').length, opened: opened.length };
     assert.deepEqual(await open(), { kind: 'noBrain' });
@@ -285,9 +287,11 @@ suite('Entire brain', () => {
     assert.equal(section().state, 'pluginMissing');
     assert.match(api.brainView.html, /entire-brain plugin, which is not installed/);
     assert.deepEqual(links(), [
+      { label: 'Run in Terminal', command: 'entire.runSetupStep', args: [fixture.root, 'installBrain'] },
       { label: 'Copy Command', command: 'entire.copyBrainInstallCommand' },
       { label: 'Retry', command: 'entire.refresh' },
     ]);
+    assert.deepEqual(calls('plugin'), []);
     const before = { viz: calls('brain viz').length, opened: opened.length };
     assert.deepEqual(await open(), { kind: 'pluginMissing' });
     assert.equal(calls('brain viz').length, before.viz);

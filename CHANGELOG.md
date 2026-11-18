@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Search: Entire: Search, and a search button on the Checkpoints, Sessions, and Trails views, open a picker that searches as you type. It matches the checkpoints, sessions, and trails the views have read, and for a repository whose `origin` uses the `entire://` scheme it adds the checkpoints, commits, and sessions that Entire's search service ranks. It finds trails by number, title, description, phase, or branch. The `entire.search.hosted` setting turns off Entire's search.
+- Setup view, first in the sidebar while the CLI is missing or too old or Entire is not enabled, and on request with Entire: Set Up Entire. It lists the CLI, login, Enable, Graph, Brain, and Brain Connect steps with what it found for each, and each step's button runs its command in a terminal. The views pick up the result when the command ends.
+- The Brain view offers to run `entire plugin install brain` or `entire brain setup` in a terminal, beside Copy Command.
+
 ## 0.1.1
 
 - The extension's homepage is https://entire.com, so its Open VSX listing links to the Entire website.

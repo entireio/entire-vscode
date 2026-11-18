@@ -15,8 +15,11 @@ import { BrainService } from './ext/brainService';
 import { PANEL_VIEW_TYPE, PanelManager, TRAIL_PANEL_VIEW_TYPE } from './ext/panel/panelManager';
 import { RefreshController } from './ext/refresh';
 import { RepoManager } from './ext/repoManager';
+import { SearchPicker } from './ext/searchPicker';
+import { SetupService } from './ext/setupService';
 import { TranscriptFiles } from './ext/transcriptFiles';
 import { BRAIN_VIEW_ID, BrainView } from './ext/views/brainView';
+import { SETUP_VIEW_ID, SetupView } from './ext/views/setupView';
 import { CheckpointsTree } from './ext/views/checkpointsTree';
 import type { Node } from './ext/views/nodes';
 import { ScrollLoader } from './ext/views/scrollLoader';
@@ -45,6 +48,9 @@ export interface EntireTestApi {
   panels: PanelManager;
   brain: BrainService;
   brainView: BrainView;
+  setup: SetupService;
+  setupView: SetupView;
+  search: SearchPicker;
 }
 
 export function activate(context: vscode.ExtensionContext): EntireTestApi {
@@ -56,6 +62,8 @@ export function activate(context: vscode.ExtensionContext): EntireTestApi {
   const actions = new Actions(manager, text, transcripts);
   const panels = new PanelManager(manager, actions, context.extensionUri);
   const brain = new BrainService(manager, log);
+  const setup = new SetupService(manager, brain, context.workspaceState, log);
+  const search = new SearchPicker(manager, panels, actions, log);
 
   const checkpointsTree = new CheckpointsTree(manager);
   const sessionsTree = new SessionsTree(manager);
@@ -73,6 +81,8 @@ export function activate(context: vscode.ExtensionContext): EntireTestApi {
 
   // Last in the sidebar and collapsed until it is opened. Shown when Entire is enabled. See package.json.
   const brainView = new BrainView(manager, brain);
+  // First in the sidebar, while Entire needs setting up and until it is hidden. See package.json.
+  const setupView = new SetupView(setup);
 
   const scrollLoader = new ScrollLoader(manager);
   // The selected row follows a detail tab that moves on, in the view the tab was opened from.
@@ -174,6 +184,9 @@ export function activate(context: vscode.ExtensionContext): EntireTestApi {
       refresh.flush();
       ensureBrain();
     }),
+    setup,
+    setupView,
+    vscode.window.registerWebviewViewProvider(SETUP_VIEW_ID, setupView),
     vscode.window.registerWebviewPanelSerializer(PANEL_VIEW_TYPE, panels),
     vscode.window.registerWebviewPanelSerializer(TRAIL_PANEL_VIEW_TYPE, panels.trailSerializer),
     scrollLoader,
@@ -188,7 +201,7 @@ export function activate(context: vscode.ExtensionContext): EntireTestApi {
         for (const panel of panels.allTrails) panel.refresh();
       }
     }),
-    ...registerCommands(manager, panels, actions, log, brain),
+    ...registerCommands(manager, panels, actions, log, brain, setup, search),
   );
 
   updateChrome();
@@ -206,6 +219,9 @@ export function activate(context: vscode.ExtensionContext): EntireTestApi {
     panels,
     brain,
     brainView,
+    setup,
+    setupView,
+    search,
   };
 }
 

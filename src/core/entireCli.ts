@@ -12,15 +12,19 @@ import {
   type RemoteCheckpoint,
   type RemoteSessionPage,
 } from './remoteSessions';
+import { readSearchPage, searchQuery, type SearchPage } from './search';
 import { startServer, type RunningServer, type StartServer } from './serverProcess';
 import {
+  readAuthStatus,
   readCheckpointDetail,
   readCheckpointRows,
+  readGraphVersion,
   readSessionRows,
   readStatus,
   readTrailDetail,
   readTrailPage,
   readTrailTimeline,
+  type AuthStatus,
   type CheckpointDetail,
   type CheckpointRow,
   type SessionRow,
@@ -29,7 +33,7 @@ import {
   type TrailPage,
   type TrailTimeline,
 } from './schemas';
-import { isCheckpointId } from './trailers';
+import { isCheckpointId, isSessionId } from './trailers';
 import { parseCheckpointAuthor } from './transcript/cliText';
 import { isTrailId, type TimelineOf, type TrailListStatus, type TrailRef } from './trails';
 
@@ -47,12 +51,16 @@ interface RunOptions {
 /** Most text the CLI's rendered transcript view may return. Raw transcripts go to a file and have no limit. */
 const TRANSCRIPT_MAX_BYTES = 64 * 1024 * 1024;
 const RAW_TRANSCRIPT_TIMEOUT_MS = 180_000;
-/** Session IDs come from agents: UUIDs, ULIDs, or `ses_...`. Never a flag. */
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 
 /** `entire brain viz` listens in well under a second. This leaves room for a slow disk. */
 const BRAIN_VIZ_READY_MS = 20_000;
 const NO_BRAIN_PLUGIN = 'The entire-brain plugin is not installed.';
+const NO_GRAPH_PLUGIN = 'The Graph plugin is not installed.';
+
+/** Entire's search service answers in about two seconds. */
+const SEARCH_TIMEOUT_MS = 30_000;
+/** `entire auth status` asks entire.io about the saved login. */
+const AUTH_TIMEOUT_MS = 15_000;
 
 /** Trail calls go to entire.io, so they wait on the network. */
 const TRAIL_TIMEOUT_MS = 30_000;
@@ -104,7 +112,12 @@ export interface TrailScope {
  *
  * The brain calls run the entire-brain plugin, which may not be installed.
  * `status` and `viz` read the brain from disk. The commands that install the
- * plugin, or build or refresh a brain, are not used here.
+ * plugin, or build or refresh a brain, are not used here: the Setup view runs
+ * those in a terminal, where the user sees them and answers their prompts.
+ *
+ * `search` asks Entire's search service, and `authStatus` asks entire.io
+ * about the saved login. `graphVersion` only says whether the Graph plugin
+ * is installed.
  */
 export class EntireCli {
   constructor(
@@ -260,7 +273,7 @@ export class EntireCli {
     file: string,
     signal?: AbortSignal,
   ): Promise<Result<number>> {
-    if (!SESSION_ID.test(sessionId)) return fail('unexpectedOutput', 'That is not a session ID.');
+    if (!isSessionId(sessionId)) return fail('unexpectedOutput', 'That is not a session ID.');
     const result = await this.run(cwd, ['session', 'info', sessionId, '--transcript'], {
       timeoutMs: RAW_TRANSCRIPT_TIMEOUT_MS,
       stdoutFile: file,
@@ -297,7 +310,7 @@ export class EntireCli {
    * is a slow call for a long session.
    */
   async remoteSessionCheckpoints(cwd: string, sessionId: string, signal?: AbortSignal): Promise<Result<RemoteCheckpoint[]>> {
-    if (!SESSION_ID.test(sessionId)) return fail('unexpectedOutput', 'That is not a session ID.');
+    if (!isSessionId(sessionId)) return fail('unexpectedOutput', 'That is not a session ID.');
     const result = await this.run(cwd, ['api', '--to', 'cell', remoteSessionCheckpointsPath(sessionId)], {
       timeoutMs: API_TRANSCRIPT_TIMEOUT_MS,
       maxBytes: API_TRANSCRIPT_MAX_BYTES,
@@ -306,6 +319,41 @@ export class EntireCli {
     return apiResult(result, 'list the checkpoints of the session on Entire', readRemoteCheckpoints, {
       notFound: 'Entire could not find this session.',
     });
+  }
+
+  /**
+   * Searches the repository's checkpoints, commits, and sessions with
+   * Entire's search service, best match first. The query goes after `--`,
+   * so nothing in it is read as a flag. The CLI scopes the search to the
+   * repository of the `origin` remote of `cwd`.
+   */
+  async search(cwd: string, query: string, limit: number, signal?: AbortSignal): Promise<Result<SearchPage>> {
+    const text = searchQuery(query);
+    if (text === undefined) return fail('unexpectedOutput', 'That is not a search query.');
+    if (!isCount(limit, 100)) return fail('unexpectedOutput', 'That is not a page size.');
+    const result = await this.run(cwd, ['search', '--json', '--limit', String(limit), '--', text], {
+      timeoutMs: SEARCH_TIMEOUT_MS,
+      ...(signal ? { signal } : {}),
+    });
+    return jsonResult(result, 'search Entire', readSearchPage, {
+      remote: true,
+      noAccess: 'Entire does not know this repository, or your login cannot see it.',
+    });
+  }
+
+  /** Whether a login to Entire is saved, and whose. */
+  async authStatus(cwd: string): Promise<Result<AuthStatus>> {
+    const result = await this.run(cwd, ['auth', 'status', '--json'], { timeoutMs: AUTH_TIMEOUT_MS, dedupe: true });
+    return jsonResult(result, 'read the login status', readAuthStatus, { remote: true });
+  }
+
+  /** The version of the Graph plugin, which fails with `pluginMissing` when it is not installed. Local only. */
+  async graphVersion(cwd: string): Promise<Result<string>> {
+    const result = await this.run(cwd, ['graph', 'version', '--json'], { timeoutMs: 10_000, dedupe: true });
+    if (result.code !== 0 && result.code !== null && isPluginMissing(result.stderr, 'graph')) {
+      return fail('pluginMissing', NO_GRAPH_PLUGIN, lastLines(result.stderr));
+    }
+    return jsonResult(result, 'check the Graph plugin', readGraphVersion);
   }
 
   /** Whether the repository has a brain, as the entire-brain plugin reports it. Reads local state only. */

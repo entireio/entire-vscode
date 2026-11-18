@@ -1,4 +1,7 @@
 import type { BrainDetail } from './brain';
+import { BASE_STYLES, button, escapeHtml, pageHtml } from './pageKit';
+
+export { escapeHtml } from './pageKit';
 
 /** What the Brain view shows for one repository. */
 export interface BrainPageSection {
@@ -20,44 +23,14 @@ export interface BrainPageSection {
 export const BRAIN_PAGE_COMMANDS: readonly string[] = [
   'entire.openBrainGraph',
   'entire.stopBrainGraph',
+  'entire.runSetupStep',
   'entire.copyBrainInstallCommand',
   'entire.copyBrainSetupCommand',
   'entire.refresh',
   'entire.showLog',
 ];
 
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/** A link that runs a command, with its arguments, for a page that allows command links. */
-function commandHref(command: string, args?: readonly unknown[]): string {
-  const query = args && args.length > 0 ? `?${encodeURIComponent(JSON.stringify(args))}` : '';
-  return escapeHtml(`command:${command}${query}`);
-}
-
-function button(label: string, command: string, args?: readonly unknown[], kind: 'primary' | 'secondary' = 'secondary'): string {
-  return `<a class="button ${kind}" role="button" href="${commandHref(command, args)}">${escapeHtml(label)}</a>`;
-}
-
-const STYLES = `
-  body { margin: 0; padding: 4px 20px 14px; color: var(--vscode-foreground); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); line-height: 1.5; }
-  h2 { margin: 14px 0 6px; font-size: 1em; font-weight: 600; }
-  section:first-child h2 { margin-top: 4px; }
-  p { margin: 6px 0; }
-  .muted { color: var(--vscode-descriptionForeground); }
-  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-  .button { flex: 1 1 auto; box-sizing: border-box; padding: 4px 12px; border-radius: 2px; text-align: center; text-decoration: none; cursor: pointer; }
-  .button.primary { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
-  .button.primary:hover { background: var(--vscode-button-hoverBackground); }
-  .button.secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
-  .button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-  .button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+const STYLES = `${BASE_STYLES}
   dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; row-gap: 3px; margin: 8px 0 0; cursor: default; }
   .row { display: contents; }
   dt { color: var(--vscode-descriptionForeground); }
@@ -78,12 +51,14 @@ function notice(section: BrainPageSection): string {
       return (
         '<p>The brain of a repository comes from the entire-brain plugin, which is not installed. ' +
         'Run "entire plugin install brain" in a terminal, then retry.</p>' +
-        `<p class="actions">${button('Copy Command', 'entire.copyBrainInstallCommand', undefined, 'primary')}${button('Retry', 'entire.refresh')}</p>`
+        `<p class="actions">${button('Run in Terminal', 'entire.runSetupStep', [section.root, 'installBrain'], 'primary')}` +
+        `${button('Copy Command', 'entire.copyBrainInstallCommand')}${button('Retry', 'entire.refresh')}</p>`
       );
     case 'noBrain':
       return (
         '<p>This repository has no brain yet. Run "entire brain setup" in a terminal to build one, then retry.</p>' +
-        `<p class="actions">${button('Copy Command', 'entire.copyBrainSetupCommand', undefined, 'primary')}${button('Retry', 'entire.refresh')}</p>`
+        `<p class="actions">${button('Run in Terminal', 'entire.runSetupStep', [section.root, 'setupBrain'], 'primary')}` +
+        `${button('Copy Command', 'entire.copyBrainSetupCommand')}${button('Retry', 'entire.refresh')}</p>`
       );
     case 'failed':
       return (
@@ -129,15 +104,5 @@ export function brainPageHtml(sections: readonly BrainPageSection[], nonce: stri
     sections.length === 0
       ? '<p class="muted">Entire is not enabled in an open repository.</p>'
       : sections.map((section) => sectionHtml(section, sections.length > 1)).join('');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${escapeHtml(nonce)}'">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style nonce="${escapeHtml(nonce)}">${STYLES}</style>
-<title>Brain</title>
-</head>
-<body>${body}</body>
-</html>`;
+  return pageHtml('Brain', STYLES, body, nonce);
 }

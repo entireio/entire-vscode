@@ -262,6 +262,28 @@ function compact<T extends object>(value: { [K in keyof T]: T[K] | undefined }):
   return out as T;
 }
 
+/** `entire auth status --json`, as far as the extension uses it. */
+export interface AuthStatus {
+  loggedIn: boolean;
+  /** The account, such as `github:octocat`. */
+  user?: string;
+  displayName?: string;
+}
+
+export function readAuthStatus(value: unknown): AuthStatus | undefined {
+  if (!isObject(value) || typeof value.logged_in !== 'boolean') return undefined;
+  return compact<AuthStatus>({
+    loggedIn: value.logged_in,
+    user: str(value.user),
+    displayName: str(value.display_name),
+  });
+}
+
+/** The version that `entire graph version --json` reports, such as `v0.6.0`. */
+export function readGraphVersion(value: unknown): string | undefined {
+  return isObject(value) ? str(value.version) : undefined;
+}
+
 export function readStatus(value: unknown): StatusInfo | undefined {
   if (!isObject(value) || typeof value.enabled !== 'boolean') return undefined;
   return compact<StatusInfo>({

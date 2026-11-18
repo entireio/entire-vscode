@@ -147,6 +147,9 @@ const healthy = {
     agents: ['Claude Code'],
     active_sessions: [{ agent: 'Claude Code', session_id: 'live-session', status: 'active', model: 'test-model' }],
   }),
+  // What the Setup view checks when it is on screen.
+  'auth status --json': json({ logged_in: true, user: 'github:fixture-author', display_name: 'Fixture Author' }),
+  'graph version --json': json({ identity_revision: '4', provider: 'entire-graph', version: 'v0.6.0' }),
   'checkpoint explain --json --limit 500 --no-pager': json([
     { checkpoint_id: ids.refs, session_id: 'session-0', agent: 'Claude Code', date: '2026-01-02T03:04:05Z', message: 'Add the parser', session_count: 2, session_ids: ['session-0', 'session-1'] },
     { checkpoint_id: ids.legacy, session_id: 'session-0', agent: 'Claude Code', date: '2026-01-03T03:04:05Z', message: 'Squash the review fixes', session_count: 1, session_ids: ['session-0'] },
@@ -645,12 +648,65 @@ const brainReplies = {
     hang: true,
   },
 };
-const mainScenario = { ...healthy, ...trailReplies, ...brainReplies };
+// Entire's search, for the query the search tests type. It ranks a commit
+// the fixture repository has, with its checkpoint, then a session that only
+// Entire knows, then a commit the clone has never fetched, and a pull
+// request, which the extension cannot open.
+const SEARCH_KEY = (query) => `search --json --limit 25 -- ${query}`;
+const searchReplies = {
+  [SEARCH_KEY('parser')]: json({
+    results: [
+      {
+        type: 'commit',
+        data: {
+          commitSha: main.parserCommit,
+          commitSubject: 'Add the parser',
+          commitMessage: `Add the parser\n\nEntire-Checkpoint: ${ids.refs}`,
+          branch: 'main',
+          author: 'Fixture Author',
+          createdAt: '2026-01-02T03:04:05Z',
+        },
+        searchMeta: { matchType: 'both', score: 3 },
+      },
+      {
+        type: 'session',
+        data: {
+          sessionId: 'searched-session',
+          matchedCheckpointId: ids.onEntire,
+          displayName: 'Tune the Parser Elsewhere',
+          prompt: 'Tune the parser',
+          agent: 'Codex',
+          branch: 'tune-lexer',
+          createdAt: '2025-11-20T00:00:00Z',
+        },
+        searchMeta: { matchType: 'semantic', score: 2, snippet: '[user]: Tune the parser\n[assistant]: It is tuned.' },
+      },
+      {
+        type: 'commit',
+        data: { commitSha: NEVER_FETCHED, commitSubject: 'Write down how the parser works', commitMessage: 'Write down how the parser works', branch: 'notes' },
+        searchMeta: { matchType: 'semantic', score: 1 },
+      },
+      { type: 'pr', data: { id: 7, title: 'Parser pull request' }, searchMeta: { score: 1 } },
+    ],
+    total: 4,
+    page: 1,
+    total_pages: 1,
+    limit: 25,
+    counts: { repos: 0, checkpoints: 0, commits: 2, prs: 1, sessions: 1 },
+  }),
+};
+const mainScenario = { ...healthy, ...trailReplies, ...brainReplies, ...searchReplies };
 const mainScenarioFile = writeJson('healthy.json', mainScenario);
 
 const mainConfig = {
   label: 'explorer',
-  files: ['test/integration/extension.test.cjs', 'test/integration/trails.test.cjs', 'test/integration/brain.test.cjs'],
+  files: [
+    'test/integration/extension.test.cjs',
+    'test/integration/trails.test.cjs',
+    'test/integration/brain.test.cjs',
+    // Last: its login step pins the Setup view in this window.
+    'test/integration/search.test.cjs',
+  ],
   workspaceFolder: main.repo.root,
   launchArgs: launchArgs(profile('main', fakeCli)),
   env: {
@@ -672,6 +728,7 @@ const mainConfig = {
       trailListAll: trailList('all'),
       trailUrl: trailUrl(120),
       brainUrl: BRAIN_URL,
+      searchKey: SEARCH_KEY('parser'),
       // The IDs of the trails the tests open, by number.
       trailIds: Object.fromEntries([106, 110, 114, 116, 118, 120].map((n) => [n, trailId(n)])),
       neverFetched: NEVER_FETCHED,
@@ -828,6 +885,44 @@ const second = checkpointRepo();
 const multiRoot = path.join(scratch, 'two-repos.code-workspace');
 writeFileSync(multiRoot, JSON.stringify({ folders: [{ path: main.repo.root }, { path: second.repo.root }] }));
 
+// Setup: a repository on Entire where nothing is set up yet. Entire is not
+// enabled, nobody is logged in, and neither plugin has done anything. The
+// tests change these replies as each step runs.
+const setupRepo = checkpointRepo();
+const setupLog = path.join(scratch, 'setup.log');
+writeFileSync(setupLog, '');
+const setupScenario = {
+  ...healthy,
+  ...trailReplies,
+  'status --json': json({ enabled: false, agents: null, active_sessions: null, error: 'not set up' }),
+  'auth status --json': { stdout: '{"logged_in":false}\n', exitCode: 1 },
+  'graph version --json': {
+    stderr: 'Usage:\n  entire [command]\n\nError: Invalid usage: unknown command "graph" for "entire"\n',
+    exitCode: 1,
+  },
+  'brain status --json': json({ brain: { manifest_state: 'absent' } }),
+};
+const setupScenarioFile = writeJson('setup.json', setupScenario);
+const setupConfig = {
+  label: 'setup',
+  files: 'test/integration/setup.test.cjs',
+  workspaceFolder: setupRepo.repo.root,
+  launchArgs: launchArgs(profile('setup', fakeCli)),
+  env: {
+    FAKE_ENTIRE_SCENARIO: setupScenarioFile,
+    FAKE_ENTIRE_LOG: setupLog,
+    ENTIRE_TEST_FIXTURE: writeJson('setup-fixture.json', {
+      root: setupRepo.repo.root,
+      cli: fakeCli,
+      logFile: setupLog,
+      scenarioFile: setupScenarioFile,
+      scenario: setupScenario,
+      enabledStatus: healthy['status --json'],
+    }),
+  },
+  mocha,
+};
+
 const editor = process.env.ENTIRE_TEST_EDITOR;
 const inEditor = (config) => (editor ? { ...config, useInstallation: { fromPath: editor } } : config);
 
@@ -836,6 +931,7 @@ export default defineConfig(
   mainConfig,
   pagingConfig,
   scrollConfig,
+  setupConfig,
   stateConfig('not-git', 'notGit', { workspace: plainFolder }),
   stateConfig('cli-missing', 'cliMissing', { workspace: main.repo.root, cliPath: path.join(scratch, 'no-such-entire') }),
   stateConfig('cli-too-old', 'cliTooOld', {

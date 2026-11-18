@@ -15,6 +15,7 @@ import {
   locateCli,
   loginShellProbe,
   MIN_CLI_VERSION_TEXT,
+  type CliSource,
   type CliVersion,
 } from '../core/cliLocator';
 import { EntireCli } from '../core/entireCli';
@@ -284,6 +285,12 @@ export class RepoManager implements vscode.Disposable {
   viewState: ViewState = 'loading';
   cli?: EntireCli;
   cliVersion?: CliVersion;
+  /**
+   * Where the CLI was found and how, even when it is too old to use. The
+   * Setup view runs the CLI by this path in a terminal.
+   */
+  cliPath?: string;
+  cliSource?: CliSource;
   readonly store: CheckpointStore;
 
   /** The filter of the Trails view, shared by every repository in it. */
@@ -391,6 +398,8 @@ export class RepoManager implements vscode.Disposable {
       probeLoginShell: loginShellProbe(this.exec, process.env, cwd),
     });
     if (stale()) return;
+    this.cliPath = located?.path;
+    this.cliSource = located?.source;
     if (!located) {
       this.cli = undefined;
       this.log.warn(

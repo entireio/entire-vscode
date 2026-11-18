@@ -403,6 +403,118 @@ describe('EntireCli against the fake CLI', () => {
     });
   });
 
+  describe('search', () => {
+    const SHA = 'b83de22f58079bf0f599f009d938e72ddcdf9980';
+    const PAGE = {
+      results: [
+        {
+          type: 'commit',
+          data: { commitSha: SHA, commitSubject: 'Add the parser', commitMessage: `Add the parser\n\nEntire-Checkpoint: ${ULID}` },
+          searchMeta: { score: 2 },
+        },
+        { type: 'session', data: { sessionId: SESSION, matchedCheckpointId: HEX, displayName: 'Parser work' }, searchMeta: { snippet: 'the parser' } },
+      ],
+      total: 2,
+    };
+
+    it('asks Entire for JSON, with the query after --, so that nothing in it is read as a flag', async () => {
+      scenario({ 'search --json --limit 25 -- --help me': { stdout: JSON.stringify(PAGE) } });
+      const result = await cli.search(dir, '  --help me ', 25);
+      expect(invocations()).toEqual([['search', '--json', '--limit', '25', '--', '--help me']]);
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          total: 2,
+          hits: [
+            { kind: 'commit', sha: SHA, subject: 'Add the parser', checkpointIds: [ULID] },
+            { kind: 'session', sessionId: SESSION, checkpointId: HEX, name: 'Parser work', snippet: 'the parser' },
+          ],
+        },
+      });
+    });
+
+    it('runs nothing for a query it cannot pass on one line, or a page size out of range', async () => {
+      expect(!(await cli.search(dir, '   ', 10)).ok).toBe(true);
+      expect(!(await cli.search(dir, 'two\nlines', 10)).ok).toBe(true);
+      expect(!(await cli.search(dir, 'parser', 0)).ok).toBe(true);
+      expect(!(await cli.search(dir, 'parser', 101)).ok).toBe(true);
+      expect(invocations()).toEqual([]);
+    });
+
+    it('says when there is no login', async () => {
+      scenario({ 'search --json --limit 10 -- parser': { stderr: 'Error: not logged in. Run entire login first.\n', exitCode: 1 } });
+      const result = await cli.search(dir, 'parser', 10);
+      expect(!result.ok && result.failure.kind).toBe('notLoggedIn');
+    });
+
+    it('says when Entire does not know the repository', async () => {
+      scenario({ 'search --json --limit 10 -- parser': { stderr: 'Error: repository does not exist or is not visible\n', exitCode: 1 } });
+      const result = await cli.search(dir, 'parser', 10);
+      expect(!result.ok && result.failure.kind).toBe('noAccess');
+    });
+
+    it('stops when the caller cancels', async () => {
+      scenario({ 'search --json --limit 10 -- parser': { hang: true } });
+      const controller = new AbortController();
+      const pending = cli.search(dir, 'parser', 10, controller.signal);
+      setTimeout(() => controller.abort(), 150);
+      const result = await pending;
+      expect(!result.ok && result.failure.kind).toBe('aborted');
+    });
+  });
+
+  describe('authStatus', () => {
+    it('reads who is logged in', async () => {
+      scenario({
+        'auth status --json': {
+          stdout: JSON.stringify({ logged_in: true, user: 'github:octocat', display_name: 'Octo Cat', token_source: 'keyring' }),
+        },
+      });
+      expect(await cli.authStatus(dir)).toEqual({
+        ok: true,
+        value: { loggedIn: true, user: 'github:octocat', displayName: 'Octo Cat' },
+      });
+      expect(invocations()).toEqual([['auth', 'status', '--json']]);
+    });
+
+    it('reads a status that says nobody is logged in, whatever the exit code', async () => {
+      scenario({ 'auth status --json': { stdout: '{"logged_in":false}\n', exitCode: 1 } });
+      expect(await cli.authStatus(dir)).toEqual({ ok: true, value: { loggedIn: false } });
+    });
+
+    it('says when there is no login and the CLI says so in words', async () => {
+      scenario({ 'auth status --json': { stderr: 'not logged in: run entire login\n', exitCode: 1 } });
+      const result = await cli.authStatus(dir);
+      expect(!result.ok && result.failure.kind).toBe('notLoggedIn');
+    });
+  });
+
+  describe('graphVersion', () => {
+    it('reads the version of the Graph plugin', async () => {
+      scenario({ 'graph version --json': { stdout: '{"identity_revision":"4","provider":"entire-graph","version":"v0.6.0"}\n' } });
+      expect(await cli.graphVersion(dir)).toEqual({ ok: true, value: 'v0.6.0' });
+      expect(invocations()).toEqual([['graph', 'version', '--json']]);
+    });
+
+    it('says the plugin is missing when the CLI does not know the command', async () => {
+      scenario({
+        'graph version --json': {
+          stderr: 'Usage:\n  entire [command]\n\nError: Invalid usage: unknown command "graph" for "entire"\n',
+          exitCode: 1,
+        },
+      });
+      const result = await cli.graphVersion(dir);
+      expect(!result.ok && result.failure.kind).toBe('pluginMissing');
+      expect(!result.ok && result.failure.message).toBe('The Graph plugin is not installed.');
+    });
+
+    it('reports any other failure as a failed call', async () => {
+      scenario({ 'graph version --json': { stderr: 'panic: boom\n', exitCode: 2 } });
+      const result = await cli.graphVersion(dir);
+      expect(!result.ok && result.failure.kind).toBe('exit');
+    });
+  });
+
   describe('brainStatus', () => {
     const STATUS = 'brain status --json';
     const UNKNOWN = 'Usage:\n  entire [command]\n\nError: Invalid usage: unknown command "brain status --json" for "entire"\n';
