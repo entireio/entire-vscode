@@ -1,0 +1,83 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7PM7H9GQMRY1QPYW787WX0D",
+  "session_id": "d549f207-c9a9-4f23-968f-c4e46f52ba7d",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-18T06:06:46.423616Z",
+  "branch": "enable-entire",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CHANGELOG.md",
+    "package-lock.json",
+    "package.json"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5-2",
+  "turn_id": "43125c2ca4f3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 56,
+    "cache_creation_tokens": 89175,
+    "cache_read_tokens": 2298472,
+    "output_tokens": 16869,
+    "api_call_count": 25
+  },
+  "session_token_usage": {
+    "input_tokens": 56,
+    "cache_creation_tokens": 89175,
+    "cache_read_tokens": 2298472,
+    "output_tokens": 16869,
+    "api_call_count": 25
+  },
+  "redaction": {
+    "replacements": 2,
+    "layers": {
+      "betterleaks": 2,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 0,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01KTbV7Nk95TXKeEA4YPnkTv",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "entire-elements-of-style"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "43125c2ca4f3",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 137,
+        "end": 138,
+        "entry_ids": [
+          "73124977-d7f3-4c5a-804b-8959c1315c99"
+        ],
+        "tool_use_id": "toolu_01KTbV7Nk95TXKeEA4YPnkTv"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01KTbV7Nk95TXKeEA4YPnkTv"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: entire-elements-of-style",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  }
+}

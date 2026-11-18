@@ -1,0 +1,15 @@
+resolve this comment and push all the commits to a branch and create a trail
+
+---
+
+continue
+
+---
+
+<pasted_content id="5f5e">
+Thanks for the request! Almost there.
+
+The homepage on your Open VSX listing currently points to your GitHub README rather than entire.com. Please set “homepage”: “https://entire.com” in your extension’s package.json and publish a new version so the listing links back to your website.
+
+Reply here once that’s done and we’ll take another look.
+</pasted_content id="5f5e">
