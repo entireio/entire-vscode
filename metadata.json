@@ -1,0 +1,79 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7QW9TAC5STQZ06BRPZ4W60Q",
+  "strategy": "manual-commit",
+  "branch": "search-and-setup",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".vscode-test.mjs",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "package.json",
+    "src/core/brain.ts",
+    "src/core/brainPage.ts",
+    "src/core/entireCli.ts",
+    "src/core/pageKit.ts",
+    "src/core/schemas.ts",
+    "src/core/search.ts",
+    "src/core/setup.ts",
+    "src/core/setupPage.ts",
+    "src/core/trailers.ts",
+    "src/ext/brainService.ts",
+    "src/ext/commands.ts",
+    "src/ext/repoManager.ts",
+    "src/ext/searchPicker.ts",
+    "src/ext/setupService.ts",
+    "src/ext/setupTerminal.ts",
+    "src/ext/views/setupView.ts",
+    "src/extension.ts",
+    "test/integration/brain.test.cjs",
+    "test/integration/search.test.cjs",
+    "test/integration/setup.test.cjs",
+    "test/integration/states.test.cjs",
+    "test/unit/brain.test.ts",
+    "test/unit/entireCli.test.ts",
+    "test/unit/search.test.ts",
+    "test/unit/setup.test.ts",
+    "test/webview/brainPage.test.ts",
+    "test/webview/setupPage.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 352,
+    "cache_creation_tokens": 890962,
+    "cache_read_tokens": 43113368,
+    "output_tokens": 237958,
+    "api_call_count": 161,
+    "subagent_tokens": {
+      "input_tokens": 160,
+      "cache_creation_tokens": 535116,
+      "cache_read_tokens": 9400867,
+      "output_tokens": 67717,
+      "api_call_count": 80
+    },
+    "subagent_tokens_complete": true
+  },
+  "redaction": {
+    "replacements": 20,
+    "layers": {
+      "betterleaks": 2,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 2,
+      "credentialed_uri": 0,
+      "entropy": 18,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7QW9TAC5STQZ06BRPZ4W60Q",
+  "session_id": "105d1dcd-1b59-46e6-881c-455700482a5e",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-18T17:47:03.937047Z",
+  "branch": "search-and-setup",
+  "checkpoints_count": 5,
+  "save_step_count": 4,
+  "files_touched": [
+    ".vscode-test.mjs",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "package.json",
+    "src/core/brain.ts",
+    "src/core/brainPage.ts",
+    "src/core/entireCli.ts",
+    "src/core/pageKit.ts",
+    "src/core/schemas.ts",
+    "src/core/search.ts",
+    "src/core/setup.ts",
+    "src/core/setupPage.ts",
+    "src/core/trailers.ts",
+    "src/ext/brainService.ts",
+    "src/ext/commands.ts",
+    "src/ext/repoManager.ts",
+    "src/ext/searchPicker.ts",
+    "src/ext/setupService.ts",
+    "src/ext/setupTerminal.ts",
+    "src/ext/views/setupView.ts",
+    "src/extension.ts",
+    "test/integration/brain.test.cjs",
+    "test/integration/search.test.cjs",
+    "test/integration/setup.test.cjs",
+    "test/integration/states.test.cjs",
+    "test/unit/brain.test.ts",
+    "test/unit/entireCli.test.ts",
+    "test/unit/search.test.ts",
+    "test/unit/setup.test.ts",
+    "test/webview/brainPage.test.ts",
+    "test/webview/setupPage.test.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "7431d81368b3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 352,
+    "cache_creation_tokens": 890962,
+    "cache_read_tokens": 43113368,
+    "output_tokens": 237958,
+    "api_call_count": 161,
+    "subagent_tokens": {
+      "input_tokens": 160,
+      "cache_creation_tokens": 535116,
+      "cache_read_tokens": 9400867,
+      "output_tokens": 67717,
+      "api_call_count": 80
+    },
+    "subagent_tokens_complete": true
+  },
+  "session_token_usage": {
+    "input_tokens": 352,
+    "cache_creation_tokens": 890962,
+    "cache_read_tokens": 43113368,
+    "output_tokens": 237958,
+    "api_call_count": 161,
+    "subagent_tokens": {
+      "input_tokens": 160,
+      "cache_creation_tokens": 535116,
+      "cache_read_tokens": 9400867,
+      "output_tokens": 67717,
+      "api_call_count": 80
+    },
+    "subagent_tokens_complete": true
+  },
+  "redaction": {
+    "replacements": 20,
+    "layers": {
+      "betterleaks": 2,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 2,
+      "credentialed_uri": 0,
+      "entropy": 18,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01RAWPFHH2hTXmL8JwqDdvyg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "entire-elements-of-style"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "7431d81368b3",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1317,
+        "end": 1318,
+        "entry_ids": [
+          "b7dd930f-8c2d-41d7-b7f9-cde17bf09d01"
+        ],
+        "tool_use_id": "toolu_01RAWPFHH2hTXmL8JwqDdvyg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01RAWPFHH2hTXmL8JwqDdvyg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: entire-elements-of-style",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01YNnpLvQabVeLGr1KuXPCeX",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "run"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "7431d81368b3",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1546,
+        "end": 1547,
+        "entry_ids": [
+          "1427f552-a260-48f5-adff-7992ba22581a"
+        ],
+        "tool_use_id": "toolu_01YNnpLvQabVeLGr1KuXPCeX"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01YNnpLvQabVeLGr1KuXPCeX"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: run",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  }
+}

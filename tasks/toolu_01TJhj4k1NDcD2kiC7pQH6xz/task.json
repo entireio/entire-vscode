@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_01TJhj4k1NDcD2kiC7pQH6xz",
+  "agent_id": "adc787b76df4d34c2",
+  "subagent_type": "Explore",
+  "task_description": "Explore views data loading",
+  "token_usage": {
+    "input_tokens": 34,
+    "cache_creation_tokens": 169097,
+    "cache_read_tokens": 1946913,
+    "output_tokens": 17491,
+    "api_call_count": 17
+  },
+  "started_at": "2026-11-18T16:49:37.055265+07:00",
+  "completed_at": "2026-11-18T16:52:14.406303+07:00"
+}

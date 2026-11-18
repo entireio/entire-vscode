@@ -1,0 +1,504 @@
+search implementation for sessions, checkpoints and trails. Add a Entire Setup flow if entire is not setup in the repo, this should include evrything from cli, graph, brain and even brain connect for a entire hosted repo.
+
+---
+
+<task-notification>
+<task-id>a7f83e1cb5fbbdbfa</task-id>
+<tool-use-id>toolu_0157PWtJtLFv9iQ82gmMVAUo</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/a7f83e1cb5fbbdbfa.output</output-file>
+<status>completed</status>
+<summary>Agent "Explore setup and brain state" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no setup flow and nothing that runs a command in a terminal. The extension is built as read-only: for every missing step it either copies the command or opens a URL. Login, `notEnabled` and hosting are each detected indirectly, as described below.
+
+## 1. Finding the CLI, and the setup commands
+
+**How the CLI is found.** `src/core/cliLocator.ts:97` `locateCli(configured, deps): Promise&lt;LocatedCli | undefined&gt;`, where `CliSource = 'setting' | 'path' | 'known' | 'shell'` (:50).
+- **Setting first:** a non-empty `entire.cliPath` wins, with `~` expanded. If that path isn't executable the result is `undefined` and nothing else is searched (:98-102).
+- **Then PATH:** `entire`, or `entire.exe` on Windows (:118).
+- **Then known folders:** `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/go/bin`, `~/.local/share/mise/shims` (:82-91, skipped on Windows).
+- **Last, the login shell:** `loginShellProbe` (:138) runs `$SHELL -ilc` with marker strings and a 5s timeout.
+
+**Version check.** `MIN_CLI_VERSION` is 0.12.0 (:16). `parseCliVersion` reads `Entire CLI v?X.Y.Z`, and a build that reports `dev` counts as supported (:25-39). `isSupportedVersion` is at :42. The calls happen in `RepoManager.reload`, `src/ext/repoManager.ts:385-421`:
+- no CLI found → `cliMissing`
+- `entire version` fails → also `cliMissing`
+- version too old → `cliTooOld`
+
+Changing `entire.cliPath` triggers a reload (`src/extension.ts:184`).
+
+**Command handlers** (`src/ext/commands.ts`):
+
+| Command | Line | What it does |
+|---|---|---|
+| `entire.installCli` | :200 | Opens `INSTALL_URL = 'https://docs.entire.io/installation'` (:16) in the browser |
+| `entire.setCliPath` | :189-198 | Shows a file picker, then writes `entire.cliPath` to Global settings |
+| `entire.copyEnableCommand` | :204 | Copies `entire enable` |
+| `entire.copyLoginCommand` | :207 | Copies `entire login` |
+| `entire.copyBrainInstallCommand` | :184 | Copies `entire plugin install brain` |
+| `entire.copyBrainSetupCommand` | :187 | Copies `entire brain setup` |
+
+All the copy commands use `Actions.copy` (`src/ext/actions.ts:162`), which calls `vscode.env.clipboard.writeText` and shows a 2s status-bar message. `reportBrain` (:68-89) shows an information message with a "Copy Command" button.
+
+**Terminal usage:** there is none. No `createTerminal` or `sendText` anywhere in `src/` or `test/`. Comments at commands.ts:63-67, :183 and :206 say these steps are "the user's to do, in a terminal".
+
+## 2. `repoManager.ts`
+
+**Types** (:66, :69):
+```ts
+export type ViewState = 'loading' | 'noFolder' | 'notGit' | 'cliMissing' | 'cliTooOld' | 'notEnabled' | 'ready';
+export type TrailsState = 'loading' | 'loggedOut' | 'noAccess' | 'failed' | 'empty' | 'ready';
+```
+
+**How `notEnabled` is decided.** It is never a file check; nothing reads `.entire/settings.json`. It comes from `entire status --json` only:
+- `loadStatus` (:1240-1257) runs `cli.status()` and `git config --get remote.origin.url` (`src/core/git.ts:81`) in parallel.
+- `RepoContext.enabled` is `status?.enabled === true` (:236).
+- If `status` fails for any reason, the repo is stored as `{enabled:false, error}`.
+- `jsonResult` (`src/core/entireCli.ts:580`) maps prose matching `/entire is (disabled|not enabled)|entire enable/i` to `notEnabled`.
+- The view becomes `notEnabled` when no repo is enabled (:434-436).
+- File watchers and the on-focus refresh cover enabled repos only (`src/ext/refresh.ts:63-80, :94`). After `entire enable` is run outside the extension, it only notices on Retry/refresh (or a workspace-folder or `entire.cliPath` change).
+
+**How login is detected.** There is no `entire auth status` or `entire repo view` call anywhere. Login state is inferred from failures:
+- `processFailure` with `remote:true` (entireCli.ts:491-502): `/not logged in|entire login|re-authenticate/i` → `notLoggedIn`; `/does not exist or is not visible|no active mirror|needs a GitHub repo/i` → `noAccess`.
+- `apiResult` (:538) also maps `unauthorized|unauthenticated|invalid token|token expired` → `notLoggedIn`.
+- `trailsState()` (:566-578) turns these into `'loggedOut'` or `'noAccess'`, for a single trail repo only.
+- `sessionsNotice()` (:879-884) shows a "Run entire login" message when Entire's session list fails with `notLoggedIn`.
+- Both checks are lazy. They only run once the Trails or Sessions view is shown, and only for `entire://` repos.
+
+**How hosting is detected.** `repo.entireRepo = parseEntireRemote(origin)` (:1242-1249). `setState` publishes these context keys:
+- `entire.viewState`
+- `entire.hasWebRepo` = some repo has an `entireRepo` (:1228-1238)
+- `entire.hasTrails`, `entire.trailsFilter` and `entire.trailsState` (:956-960)
+
+`trailRepos` is non-empty when `viewState` is `ready` or `notEnabled` (:532-537), so trails can show before Entire is enabled.
+
+## 3. Brain
+
+**Plugin installed?** This is inferred from failures, not checked up front. `EntireCli.brainStatus` (entireCli.ts:312-322) runs `brain status --json` with a 30s timeout. A non-zero exit whose stderr matches `isPluginMissing` (`src/core/brain.ts:240`, `/unknown command "brain\b|entire-brain plugin is not installed|entire plugin install brain/i`) becomes `fail('pluginMissing', …)`. `startBrainViz` (:332-359) does the same for `brain viz --no-open --port 0`.
+
+**Brain set up for the repo?** `readBrainStatus` (brain.ts:70-126) needs `value.brain.manifest_state`. `hasBrain` = `manifestState !== 'absent'` (:215). The `BrainStatus` fields (:15-43) are:
+- `manifestState`, `generatedAt`
+- `files`, `symbols`, `relations`, `memories`, `exchanges`, `docsRecords`, `docsFiles`
+- `freshness`, `staleParts`, `warnings`
+- `updater?: 'running' | 'stopped' | 'notInstalled'`
+- `hosted?: string` (from `hosted.state`) and `hostedSynced?: boolean` (from `hosted.synced`)
+
+**Hosted or connected?** Only through `status.hosted`: `connected` or `disconnected` per the comment and fixtures. It appears as the "Hosted brain" detail row (brain.ts:199-207), and only in the `ready` state. Nothing runs or offers `entire brain connect`.
+
+**States the Brain view shows.**
+- `src/ext/brainService.ts:19`:
+  ```ts
+  export type BrainViewState = 'loading' | 'pluginMissing' | 'noBrain' | 'failed' | 'ready';
+  ```
+- `BrainOutcome` (:8-16): `opened | pluginMissing | noBrain | cancelled | failed`.
+- `stateOf` (:112-117) builds the state from `BrainInfo {loading, status?, failure?}`.
+- The context keys are `entire.brainState` and `entire.brainRunning` (:268-271).
+
+**Page content** (`src/core/brainPage.ts:73-96`):
+- `pluginMissing`: "Copy Command" (`copyBrainInstallCommand`) and Retry.
+- `noBrain`: "Copy Command" (`copyBrainSetupCommand`) and Retry.
+- `failed`: Retry and Show Log.
+
+The page runs no scripts. Its buttons are command links limited to `BRAIN_PAGE_COMMANDS` (:20-27), so any new command must be added there. `BrainView.sections()` returns `[]` unless `viewState === 'ready'` (`src/ext/views/brainView.ts:69`). The view is declared with `when: entire.viewState == 'ready'`.
+
+**When it runs.** The brain status is read only when the Brain view is shown (`src/extension.ts:122-124`), on Refresh, or when the graph is opened.
+
+**`serverProcess.ts`.** `startServer` (:44) runs long-lived processes in their own process group. It waits for a ready line, maps spawn errors to `cliMissing`, and maps an early exit to `exit`.
+
+**Graph plugin:** nothing detects it, and `entire graph` appears nowhere. The only trace is `semantic.provider: {name:'graph'}` in a unit-test fixture (`test/unit/brain.test.ts:69`), which the parser ignores.
+
+## 4. `exec.ts` and `errors.ts`
+
+**`exec`** (`src/core/exec.ts:50`):
+- Signature: `Exec = (file, args, {cwd, timeoutMs, env?, signal?, maxBytes?, stdoutFile?}) =&gt; Promise&lt;ExecResult&gt;`.
+- Uses `spawn` with `shell:false`, stdin set to `ignore`, and `detached` on POSIX.
+- Timeout or abort sends SIGTERM to the process group, then SIGKILL after 2s.
+- Defaults: `maxBytes` 16MB, stderr capped at 64KB.
+- The result carries `code`, `timedOut`, `aborted`, `truncated` and `spawnError`.
+- Because stdin is ignored, interactive commands like `entire login` can't be run through it.
+
+`EntireCli.run` (entireCli.ts:118-139) adds `NO_COLOR=1` and `GIT_TERMINAL_PROMPT=0` to the environment. It also runs calls through a concurrency lane of 4 with optional dedupe, and logs each call. `version` has a 5s timeout and `status` 10s.
+
+**`FailureKind`** (`src/core/errors.ts:2-18`):
+```ts
+'cliMissing' | 'cliTooOld' | 'notGit' | 'notEnabled' | 'notFound' | 'notLoggedIn' | 'noAccess' | 'pluginMissing' | 'timeout' | 'aborted' | 'exit' | 'spawn' | 'unexpectedOutput'
+```
+`Result&lt;T&gt;` is `{ok:true,value}|{ok:false,failure:{kind,message,detail?}}`. Classification happens in `processFailure` (entireCli.ts:475-516), where `spawnError` → `cliMissing`. `cliTooOld` is decided in RepoManager, not in classification.
+
+## 5. `webLinks.ts`
+
+`parseEntireRemote` (:19-27) matches only `^entire://&lt;host&gt;/(gh|et)/&lt;owner&gt;/&lt;repo&gt;[.git]`. It returns `EntireRepo { forge: 'gh' | 'et'; owner; repo }` (:2-8), so it does know `gh` vs `et`. A `github.com` remote gets nothing; the comment says "nothing in a local clone says whether it is" connected.
+
+`resolveWebBase` picks, in order: the `entire.webBaseUrl` setting, then `ENTIRE_WEB_BASE_URL`, then `https://entire.com` (:33-47). `repoUrl` builds `${base}/${forge}/${owner}/${repo}` (:49).
+
+## 6. `package.json` and README
+
+**Settings** (:453-479):
+- `entire.cliPath`: string, machine scope
+- `entire.loadOnScroll`: boolean
+- `entire.trails.enabled`: boolean, default true
+- `entire.webBaseUrl`: string, machine scope
+
+**`activationEvents`** (:51-54): only `onWebviewPanel:entire.detail` and `onWebviewPanel:entire.trail`. Views and commands activate the extension implicitly; the engine is `^1.95.0`.
+
+**Walkthroughs:** there are none.
+
+**`viewsWelcome`** (:89-185), on `entire.checkpoints` and `entire.sessions`:
+- `cliMissing` (:110-119): Install / Set Path / Retry links. The Sessions view has no Set Path link.
+- `cliTooOld` (:120-129): "needs Entire CLI 0.12.0", with Update (which runs `installCli`) and Retry.
+- `notEnabled` (:130-139): Copy Command (`copyEnableCommand`) and Retry.
+
+The login messages are on the Trails view only:
+- `loggedOut` (:150-154): Copy Command (`copyLoginCommand`) and Retry.
+- `noAccess` (:155-159): text that mentions `entire auth status`.
+
+The `commandPalette` entries (:378-450) hide all the copy commands with `when: false`.
+
+**README.md:** Requirements (:31-40), Getting Started (:42-46: install the CLI, `entire enable`), Settings (:48-55). "What the Extension Runs" (:57-85) says it "does not run `entire enable` for you". Limits :110 says it does not install the brain plugin or build a brain.
+
+## 7. Tests
+
+**`test/fake-entire/entire`.** Replays canned replies from `FAKE_ENTIRE_SCENARIO`, a JSON map keyed by the argv joined with spaces; a trailing ` *` matches any further arguments. A reply is `{stdout, stderr, exitCode, delayMs, hang, repeat}`. `FAKE_ENTIRE_LOG` appends each argv as a JSON line. An unknown key exits 2. There are no built-in `auth` or `status` handlers.
+
+**`.vscode-test.mjs`.**
+- Selects the fake through a profile's `entire.cliPath` setting, not PATH (:28-38).
+- The `healthy` scenario sets `version` to `Entire CLI 0.13.3` and `status --json` to `enabled:true` (:134-150).
+- `brainReplies` (:614-647) adds `brain status --json` and `brain viz …` with `hang`.
+- State launches (:839-854): `not-git`, `cli-missing` (path does not exist), `cli-too-old` (0.11.9), `not-enabled` (`{enabled:false,…,error:'not set up'}`, expects `trailRepos:1`), and `multi-root`.
+- The expected state is passed through `ENTIRE_TEST_EXPECT`.
+
+**`states.test.cjs`** asserts the `viewState` it settles in. It also asserts that no trails, remote sessions or brain status are read while the sidebar stays closed, and that trees are empty outside `ready` so the welcome text can show (:43-47).
+
+**`brain.test.cjs`** changes replies at runtime by rewriting the scenario file (:55). Cases:
+- `noBrain` with `manifest_state:'absent'` (:260)
+- `pluginMissing` with `unknown command "brain status --json"` (:279)
+- the copy commands write to the clipboard and run no `brain setup` or `plugin` command (:353-362)
+
+**Unit tests.**
+- `test/unit/cliLocator.test.ts`: version parsing and floor (:21-125), configured path (:164), search order (:213), Windows (:309), login-shell probe (:418).
+- `test/unit/brain.test.ts`: `readBrainStatus` built and absent fixtures, including `hosted:{state:'connected'|'disconnected'}` (:52-122); `isPluginMissing` cases (:325-343).
+- `test/unit/entireCli.test.ts`: covers `notEnabled` mapping (:109-125, :237) and `brainStatus` (:406).
+
+## Gaps a setup flow would need to fill
+
+1. **Login state:** nothing queries it. There is no `auth status`; it's only inferred lazily from trail and API failures on `entire://` repos.
+2. **Graph plugin:** nothing detects it.
+3. **Hosted check:** it relies only on the `entire://` origin. There is no `repo view`, and the `gh/` vs `et/` split comes from parsing the URL.
+4. **Brain connection:** shown only as a detail row when the brain is `ready`. There is no `brain connect` command.
+5. **Running commands:** commands can't be run interactively today. Nothing uses a terminal, and `exec` ignores stdin.
+6. **After setup:** going from `notEnabled` to enabled needs a manual refresh.
+7. **Brain view before setup:** it is hidden unless `viewState == 'ready'`, so it can't host setup steps for a repo that isn't enabled.</result>
+<usage><subagent_tokens>153943</subagent_tokens><tool_uses>44</tool_uses><duration_ms>135105</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adc787b76df4d34c2</task-id>
+<tool-use-id>toolu_01TJhj4k1NDcD2kiC7pQH6xz</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/adc787b76df4d34c2.output</output-file>
+<status>completed</status>
+<summary>Agent "Explore views data loading" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I mapped all six areas below. The extension makes no `entire search` or `entire checkpoint search` call today, and nothing named search exists in `src/` or `package.json` (the only hits are CLI path lookup). JSON is read by hand-written parsers, not zod (zod is not a dependency).
+
+## 1. Tree views (`src/ext/views/`)
+
+**Node union** (`nodes.ts:10-55`). The kinds are `repo`, `commit`, `checkpoint`, `slot`, `loadMore`, `otherGroup`, `sessionGroup` (`'active'|'recent'`), `session` (`session: SessionEntry`), `trail` (`trail: TrailSummary`) and `message` (`{id,text}`).
+- `checkpoint` carries `checkpointId`, `commit?`, `row?`, `sessionId?`, `position?` and `parentId`.
+- `loadMore` carries `{list, noun: ListNoun, shown, total?, scanned?: {read; total?}}`, where `ListNoun = 'Checkpoints' | 'Sessions' | 'Trails'` (`:58`).
+- `nodeId` (`:60-83`) always starts IDs with `${repo.root}|`. `RowRegistry.keepOnly` (`rowRegistry.ts:46-53`) depends on that prefix.
+
+**`paged`** (`nodes.ts:89-113`):
+```ts
+export function paged&lt;T&gt;(repo, list: string, noun: ListNoun, items: readonly T[], toNode: (item: T) =&gt; Node, options: PagedOptions = {}): Node[]
+// PagedOptions { moreToRead?: boolean; sourceTotal?: number; scanned?: {read:number; total?:number} }
+```
+It slices `items` to `repo.limit(list)` and adds a `loadMore` row when more items remain or `moreToRead` is set.
+
+**`LISTS`** (`repoManager.ts:52-64`): `commits`, `otherCheckpoints:'other'`, `activeSessions:'sessions:active'`, `recentSessions:'sessions:recent'`, `sessionCheckpoints(id)=&gt;'session:&lt;id&gt;'`, `trails(filter, read)=&gt;'trails:&lt;filter&gt;:&lt;read&gt;'`.
+- `PAGE_SIZE = 50` (`checkpointIndex.ts:7`).
+- `RepoContext.limit` and `showMore` (`repoManager.ts:241-247`) keep a per-list row limit.
+
+**Load more**
+- The row is built at `nodes.ts:562-580`. It runs `entire.loadMore` and sets `resourceUri` to the `entire-more:` scheme.
+- `commands.ts:215-218` calls `manager.showMore(repo, list)` (`repoManager.ts:485-521`). That raises the limit, then fetches more for three lists: commits (`scanForCommits`), trails (`readMoreTrails`) and recent sessions (`readMoreRemoteSessions`).
+- Scroll loading: `ScrollLoader.provideFileDecoration` (`scrollLoader.ts:37-52`) reads the `entire-more` URI and calls `showMore(..., {automatic:true})`. It respects the `entire.loadOnScroll` setting and `repo.autoLoadPaused`.
+- Other callers of `showMore`: `CheckpointsTree.find` and `SessionsTree.find`, which grow a list by up to `MAX_PAGES_TO_REACH_A_ROW = 20` pages to reach a row (`checkpointsTree.ts:9`).
+
+**contextValue** (`nodes.ts:327-337`): the flags are `[kind, ...extra]`, plus `hasCommit`, `hasCheckpoint`, `hasSession` and `hasTranscript` (checkpoint and sessionIndex both known). `web` is added when `repo.entireRepo` is set and there is a commitSha or sessionId.
+- Extras: commit gets `openable` only with a single checkpoint (`:518`); checkpoint and slot get `openable`; session gets `openable hasTranscript` (`:626`); trail gets `openable web` (`:646`).
+- `package.json` `view/item/context` menus match these with regexes such as `viewItem =~ /\bopenable\b/`.
+
+**Click to open**: `openCommand` (`nodes.ts:339-341`) runs `entire.openDetail` with the node as its argument. `commands.ts:220-232` then calls `panels.openTrail(trailTarget(node), {newTab})` or `panels.open(detailTarget(node), {newTab, origin})`.
+- Helpers: `detailTarget` (`nodes.ts:196-225`), `trailTarget` (`:264-269`), `detailViewOf` (`:231-243`), `standsFor` (`:252-261`).
+
+**How each tree builds children**
+- **`CheckpointsTree`**: `getChildren` (`checkpointsTree.ts:76-79`) passes rows through `RowRegistry.adopt`.
+  - `repoChildren` (`:175-188`) pages `index.commits` with `moreToRead: !index.exhausted`, then adds `otherGroup`.
+  - Commit children (`:148-157`): `slotNodes` (`:12-36`, from `manager.detail`) for one checkpoint, otherwise checkpoint nodes.
+  - `otherGroup` pages `index.unlinkedRows()`.
+- **`SessionsTree`**: `repoChildren` (`sessionsTree.ts:174-181`) groups into active and recent only when something is active.
+  - `sessionNodes` (`:183-198`) calls `nameSessions` and sets `moreToRead` from `moreSessionsOnEntire`.
+  - Session children (`:125-161`) come from `manager.sessionCheckpoints` and are paged under `LISTS.sessionCheckpoints`.
+- **`TrailsTree`**: no `RowRegistry` (it uses a WeakMap of parents, `:20`), and `getChildren` is synchronous.
+  - `repoChildren` (`trailsTree.ts:66-87`) pages `manager.shownTrails(list)` under `list.list`. It uses `scanned` when a phase filter is set and `sourceTotal` otherwise.
+- **`SelectionSync`** (`selectionSync.ts:27-65`) listens to `panels.onDidChangeShown`, then calls `tree.find(target)` and `view.reveal`. A panel opened without an origin is followed by the Checkpoints view.
+
+## 2. `repoManager.ts`
+
+**`RepoContext`** (`:177-270`) holds:
+- `paths`, `originUrl`, `entireRepo`, `branch`, `status`, `index?: CheckpointIndex`, `sessionRows?`, `generation`
+- `details` (an LRU cache), the private `limits`, `autoLoadPaused`, `withoutData`, `sessionNames`
+- `remoteSessions?: RemoteSessionList`, `remoteCheckpoints`, `trails?: TrailList`, `trailReads`, `trailUrls`, `trailMemory`
+
+**State machine**: `ViewState = 'loading'|'noFolder'|'notGit'|'cliMissing'|'cliTooOld'|'notEnabled'|'ready'` (`:66`), with transitions in `reload()` (`:351-455`).
+- `setState` (`:1228-1238`) sets `entire.viewState` and `entire.hasWebRepo`, then `syncTrailContext` (`:956-960`) sets `entire.hasTrails`, `entire.trailsFilter` and `entire.trailsState`.
+- `TrailsState = 'loading'|'loggedOut'|'noAccess'|'failed'|'empty'|'ready'` (`:69`, computed at `:566-578`).
+- A single `onDidChange` event redraws every tree in full.
+
+**Checkpoints**
+- `loadGit` (`:1260-1290`) builds a `CheckpointIndex` from `git log` windows.
+- `enrich` (`:1313-1326`) runs `cli.listCheckpoints(500)` in the background and calls `index.setRows`.
+- `detail()` (`:1002-1035`) caches `explainCheckpoint` results: 200 entries, 5-minute TTL.
+
+**Sessions**: `SessionEntry` (`:143-175`) has `sessionId`, `agent`, `model`, `status`, `branch`, `name`, `opening`, `listedCheckpoints`, `checkpointsFromEntire`, `lastPrompt`, `title`, `lastActive`, `local?: SessionRow`, `checkpoints: SessionCheckpoint[]` and `mayHaveEarlier`.
+- `sessions(repo)` (`:1038-1128`) rebuilds the list on every call by merging, in order: `index.sessions()`, `sessionRows`, `status.activeSessions`, `remoteSessions`, `remoteCheckpoints` and `sessionNames`.
+- `sessionRows` comes from `loadSessionRows` (`:985-995`), which runs only when the Sessions view is first shown and on a manual refresh.
+- Entire's remote session list: `ensureRemoteSessions` (`:788`), `readFirstRemoteSessions` (`:800-829`) and `readMoreRemoteSessions` (`:840-868`, at most 4 pages of 50 per read). `moreSessionsOnEntire` is at `:871`, `sessionCheckpoints` at `:898-948`.
+
+**Trails**
+- `TrailList` (`:76-85`) is `TrailPages` plus `{list, status, loading, failure?}`.
+- Reads: `ensureTrails` (`:584`), `readFirstTrails` (`:613-652`), `readMoreTrails` (`:718-761`).
+- `withViewProgress(viewId, …)` (`:767-781`) shows the progress bar on the view.
+
+**Existing filter**: `trailFilter: TrailFilter` (`:290`). `shownTrails` (`:556-559`) filters by phase on the client. `setTrailFilter` (`:594-606`) reuses the trails already read, or reloads when the status changed. Filter keys are `all|open|closed|open:&lt;phase&gt;` (`core/trails.ts:29-55`).
+
+## 3. CLI layer
+
+**Result type** (`core/errors.ts:28`):
+```ts
+export type Result&lt;T&gt; = { ok: true; value: T } | { ok: false; failure: Failure }; // Failure {kind: FailureKind; message; detail?}
+```
+
+**`EntireCli.run`** (`entireCli.ts:118-139`) runs through `Lane(4)`. It supports an optional `dedupe` key and `priority:'background'`, and sets `NO_COLOR=1`.
+
+**Every invocation**:
+- `version` (`:141`)
+- `status --json` (`:152`)
+- `checkpoint explain --json --limit N --no-pager` (`:162`, background)
+- `checkpoint explain --checkpoint ID` with `--json` (`:171`), `--full` (`:183`), `--short` (`:201`), or `--transcript --session-index N`, the last streamed to a file (`:217`); each ends with `--no-pager`
+- `session list --json` (`:248`)
+- `session info ID --transcript` (`:257`)
+- `api --to cell /api/v1/repos/{repo_id}/sessions?scope=all&amp;limit=N[&amp;cursor=]` (`:282`)
+- `api --to cell …/sessions/&lt;id&gt;/transcript` (`:299`)
+- `brain status --json` (`:312`)
+- `brain viz --no-open --port 0` (`:332`)
+- `trail list --project P --repo R [--status open|closed] --limit N --json [--page-token=T]` (`:367`)
+- `trail show &lt;id|n&gt; --project P --json` (`:400`)
+- `trail timeline … --limit N --json [--page-token=]` (`:419`)
+
+**Parsing**
+- `jsonResult` (`:560-587`) parses stdout before checking the exit code and detects "not enabled" prose.
+- `apiResult` (`:523-553`) handles `entire api` replies.
+- `processFailure` (`:475-516`) maps stderr to `notLoggedIn`, `noAccess` or `notFound`.
+- Readers in `schemas.ts` take what they recognise: helpers at `:234-263`, plus `readCheckpointRows`, `readSessionRows`, `readTrailPage` and the rest.
+- Arguments are checked so none can start with a dash: `SESSION_ID` (`:51`), `PAGE_TOKEN` (`:65`), `isCheckpointId`. A search query argument will need the same guard.
+
+**Version gate**: `MIN_CLI_VERSION` 0.12.0 (`core/cliLocator.ts:16-20`), checked by `isSupportedVersion` (`:42-48`, dev builds pass). A failure sets `cliTooOld` (`repoManager.ts:416`).
+
+**Other core modules**
+- `remoteSessions.ts`: `REMOTE_SESSIONS_PAGE=50`, the `RemoteSession`, `RemoteSessionPage` and `RemoteCheckpoint` types, API paths, readers, and `remoteRefusal`.
+- `trails.ts`: filter types and labels, `addTrailPage`, `readTrailPages` (at most 4 pages), `trailProject`/`trailRepo`, `TrailRef`, `isTrailId`, `primaryChange`.
+- `checkpointIndex.ts`: `CheckpointIndex` (`commits`, `row`, `commitsFor`, `unlinkedRows`, `sessions`, `position`) and `loadPage` (2000-commit windows).
+
+## 4. Commands and QuickPick
+
+- `registerCommands` (`commands.ts:22-292`) returns `Disposable[]`, which `extension.ts:191` spreads into the subscriptions. The `onNode` helper (`:30-34`) ignores calls that don't pass a node.
+- **Plain QuickPicks**: `pickWebRepo` and `pickEnabledRepo` use `showQuickPick` (`:42-61`).
+- **`createQuickPick` pattern**: `pickTrailFilter` (`:96-137`) builds items with a separator, sets `activeItems`, and resolves a Promise from `onDidAccept`/`onDidHide`. There is no live-query example yet: nothing uses `onDidChangeValue` or `busy`.
+- **Optional-argument pattern**: `entire.filterTrails(key?)` (`:210-213`) applies the key if given and opens the picker otherwise. Tests call it with an argument.
+- `package.json` has `view/title` menus (refresh is `navigation@1`, filterTrails `@2`, openRepoOnWeb `@3`) and `commandPalette` `when` clauses. There are no keybindings.
+- `activate` returns `EntireTestApi` (`extension.ts:35-48`), which the host tests use.
+
+## 5. Opening detail panels
+
+- `DetailTarget {repoRoot; mode:'checkpoint'|'session'; checkpointId?; commitSha?; sessionId?}` (`shared/protocol.ts:13-20`).
+- `TrailTarget {repoRoot; mode:'trail'; trail:number; id?}` (`:199-206`).
+- `PanelManager.open(target, {newTab, origin?})` (`panelManager.ts:96-108`). With no origin it fires `onDidChangeShown`, so the Checkpoints view selects the matching row.
+- `openTrail(target, {newTab})` (`:71-79`).
+- Validation: `readDetailTarget` (`panelController.ts:61-72`) and `readTrailTarget` (`trailPanelController.ts:72-81`).
+- **Checkpoint mode** loads `manager.detail(repo, checkpointId)` (`panelController.ts:246`). It works for any ID the CLI knows; `commitSha` is optional (`findCommit`, `:442`).
+- **Session mode** looks up `manager.sessionEntry(repo, sessionId)` (`:224-231`). A session missing from the merged `sessions()` list falls into `sessionOnly`, which shows "Entire has no record of this session" (`:399-428`). Search results for sessions that haven't been loaded will need handling here.
+- **Trail mode** resolves through `manager.trailRef` (`repoManager.ts:667-671`) and `showTrail`. It needs `entireRepo` and `entire.trails.enabled`.
+
+## 6. Tests
+
+**Unit tests**
+- vitest runs `test/unit/**/*.test.ts` and `test/webview/**/*.test.ts` (`vitest.config.mts`).
+- `support.ts` provides `isolateGitConfig`, `deferred`, `settle`, `fakeSha` and `commitRecord(n, ids)`.
+- `test/unit/entireCli.test.ts` runs `new EntireCli(FAKE_ENTIRE, exec, new Lane(4))` against a `scenario.json` written per test.
+
+**Fake CLI** (`test/fake-entire/entire`)
+- The lookup key is argv joined with spaces. An exact match wins; otherwise the longest pattern ending in `" *"` (any trailing arguments) is used.
+- A reply is `{stdout, stderr, exitCode, delayMs, hang, repeat}`. With no matching reply it exits 2.
+- It reads `FAKE_ENTIRE_SCENARIO` and appends each argv to `FAKE_ENTIRE_LOG`.
+
+**Fixture repos**: `fixtureRepo.ts` provides `createFixtureRepo()` (`commit`, `commitFiles`, `bulkCommits`, `writeRef`, `addRefCheckpoint`, `addLegacyCheckpoints`), plus `transcriptLine` and `checkpointFiles`.
+
+**Host tests**
+- `.vscode-test.mjs` builds the fixtures and scenarios: the `healthy` scenario (`:134`, CLI version 0.13.3) and `mainConfig` (`:651-675`), whose `ENTIRE_TEST_FIXTURE` JSON carries `logFile`, `scenarioFile` and `scenario`. A new test file has to be added to a config's `files` list there.
+- Pattern from `trails.test.cjs`:
+  - `extension.activate()` returns the api.
+  - `until()` polls for a condition.
+  - `calls(prefix)` reads the invocation log.
+  - `reply()` rewrites the scenario file mid-suite.
+  - Tests run `executeCommand('entire.filterTrails','closed')` and assert on `getChildren`/`getTreeItem` labels, descriptions and contextValue.
+
+**Scripts**: `build` (esbuild), `typecheck` (two tsconfigs), `lint` (`eslint .`), `test` (`vitest run`), `check` (lint, typecheck and test), `test:host` (build, then `vscode-test`). The extension requires VS Code `^1.95.0`.</result>
+<usage><subagent_tokens>180052</subagent_tokens><tool_uses>41</tool_uses><duration_ms>157415</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa49899294d160870</task-id>
+<tool-use-id>toolu_01FBQgmf56qTJwjN4epy7mJg</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/aa49899294d160870.output</output-file>
+<status>completed</status>
+<summary>Agent "Review plan against source" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I checked the plan against the source. Most of its claims hold, but the corrections below need to go in before implementation. They're ordered by severity.
+
+### High
+
+1. **`readTrailPages` can't read the first page** (`src/core/trails.ts:126-143`). It loops only while `list.nextPageToken` is set, and it needs an `enough()` callback.
+   - Plan says: read with `readTrailPages`, at most 4 pages.
+   - Should say: read page 1 with `manager.cli.listTrails(root, {project: trailProject(r), repo: trailRepo(r)}, 'all', PAGE_SIZE)` and add it with `addTrailPage`. Then call `readTrailPages(list, fetch, () =&gt; false, {maxPages: 3})`.
+   - Iterate `manager.trailRepos` (`repoManager.ts:532`), not "each repository with `entireRepo`". That getter already applies the trails setting and the view-state gate.
+
+2. **The Setup page disappears when Enable succeeds.** `showSetup` is derived from `viewState ∈ {cliMissing, cliTooOld, notEnabled}`. After `entire enable`, `reload()` reaches `ready`, the view hides, and the Graph, Brain and Connect steps vanish. Since refresh is gated on the view being visible, nothing re-checks them either. Set the session flag once a step runs (or while the view is visible), and clear it only on Hide Setup.
+
+3. **Test harness gaps.**
+   - State launches have no `FAKE_ENTIRE_LOG` (`.vscode-test.mjs:684-697`), so "never runs `auth status`/`graph version`/`search`" can't be asserted from the log. Either add a log file, or assert on in-memory state such as setup HTML `''` and facts unset, which is how the existing invariants are written (`states.test.cjs:21-33`).
+   - Tests can't read context keys, so expose the computed `showSetup` on `EntireTestApi`.
+   - `setup.test.cjs` must not share the `not-enabled` or `cli-missing` launches with `states.test.cjs`. Opening the sidebar in `not-enabled` also shows Trails (`hasTrails` is true there), which runs `trail list` and breaks the "sidebar never opened" premise (`states.test.cjs:18-19`). Give it its own launch, scenario file and log.
+   - `runSetupStep` would really run the command in a terminal: `entire enable` against the fake CLI, or `brew`/`curl` for the CLI step. Make the terminal runner replaceable, the way `brain.openUrl` is (`brainService.ts:59`).
+
+### Medium
+
+4. **More brain tests break than the plan lists.** Besides `brain.test.cjs:288-291`, `test/webview/brainPage.test.ts:93,101` assert the exact buttons, and `:148` asserts that every command in `BRAIN_PAGE_COMMANDS` is used.
+
+5. **Login has no follow-up refresh.** `reload({manual:false})` re-reads trails and Entire's session list only on a manual reload (`repoManager.ts:426-433, 446`). After the Login step, call `loadTrails` and `loadRemoteSessions` for repos whose `failure.kind === 'notLoggedIn'`. Otherwise "loggedOut" and `sessionsNotice()` stay on screen.
+
+6. **Gate hosted search on `repo.entireRepo`.** README:79 promises network calls only for `entire://` origins, and the plan gates only on the setting.
+
+7. **Local session data is thinner than the plan assumes.**
+   - `sessions(repo)` returns `{active, recent}`, not a flat list.
+   - Names (`remoteSessions`) and `lastPrompt` (`sessionRows`) stay unset until the Sessions view is shown (`repoManager.ts:213-214`, `extension.ts:98-107`).
+   - `branch` is set only for active sessions (`:1081`).
+   - Also match `entry.title` and `repo.index.allRows()` messages; the CLI's checkpoint rows cover checkpoints on other branches.
+   - Never call `loadSessionRows` from search, because it prunes session state.
+
+8. **Quick Pick ordering.** `sortByLabel` isn't in the stable 1.95 typings. With a non-empty value, VS Code re-sorts items by label match, and `alwaysShow` doesn't stop that. Separators probably stop rendering while you type (I couldn't confirm this from source). Don't rely on separator groups or Entire's ranking surviving; put the kind in the codicon or description, and check this early in F5.
+
+9. **`entire.openSetup` race.** `setContext` is fire-and-forget throughout (`repoManager.ts:1230`), and `&lt;view&gt;.focus` on a hidden view rejects (`trails.test.cjs:801` swallows exactly that). Await `setContext` before `entire.setup.focus` and tolerate a rejection.
+
+### Low
+
+10. **No new BrainService API is needed.** `loadStatus(repo)` is public (`brainService.ts:138`), along with `details(root)` (`:96`), `stateOf` (`:112`), `ensureStatus()` (`:123`, enabled repos only) and `onDidChange`.
+
+11. **The CLI-missing and too-old states leave repo facts unset.** In those states `loadStatus` never runs, so `repo.entireRepo` and `repo.status` are undefined. Enable and Connect must render as blocked or unknown, never "needed".
+
+12. **Manifest details.**
+    - The wrapper commands need their own `$(search)` icon, because `view/title` shows the wrapper's icon.
+    - Gate the Checkpoints and Sessions search buttons on `entire.viewState == 'ready'`.
+    - The extension activates only on views and commands (`package.json:51-54`). A palette `when` on keys it sets hides Search until the sidebar has been opened once. Give `entire.openSetup` no `when`.
+
+13. **Small fixes.**
+    - `SESSION_ID` isn't exported (`entireCli.ts:51`).
+    - `relativeTime` takes milliseconds, but `CommitRecord.authorTime` is in seconds (`trailers.ts:39`).
+    - `showCommitDiff` on a commit missing from the clone says "changed no files" (`actions.ts:80-82`). Check `git.commit(root, sha)` first.
+    - The docs URL is `docs.entire.io` (`commands.ts:16`), not `docs.entire.com`.
+    - `&amp; '…'` quoting works only in PowerShell. Choose it from `vscode.env.shell`, not the platform.
+    - `runSetupStep` should check `root` with `manager.repoFor` and `stepId` against the step enum.
+
+### Verified as Stated
+
+- A checkpoint-mode `sessionId` preselects the slot (`protocol.ts:18`, `panelController.ts:434-437`).
+- Session mode says "no record" for unknown sessions (`panelController.ts:422`).
+- `manager.detail` uses `explainCheckpoint`, which asks the remote (`repoManager.ts:998-1012`).
+- `parseCheckpointIds` is exported (`trailers.ts:26`), and `isCheckpointId` exists.
+- `open()` without an origin is safe. It fires `onDidChangeShown`, and the Checkpoints view follows only if visible (`selectionSync.ts:49-52`). Session targets just aren't selected.
+- `cliPath`/`cliSource` fit `reload()`: `located` is in scope at `:386-421`. Store it before the version check and clear it when nothing is located.
+- `view/title` commands get no arguments (`commands.ts:153`), so the wrapper commands are needed.
+- `&lt;viewId&gt;.focus` works for webview views (`brain.test.cjs:121`).
+- `isPluginMissing` is at `brain.ts:240`.
+- Shell-integration APIs are in the 1.95 typings.
+- `views.entire.at(-1)` stays Brain (`brain.test.cjs:96`), so putting Setup first doesn't break that test.
+
+### Critical Files for Implementation
+- /Users/abhi/Documents/entire-vscode/src/ext/repoManager.ts
+- /Users/abhi/Documents/entire-vscode/src/core/trails.ts
+- /Users/abhi/Documents/entire-vscode/src/extension.ts
+- /Users/abhi/Documents/entire-vscode/.vscode-test.mjs
+- /Users/abhi/Documents/entire-vscode/test/integration/states.test.cjs</result>
+<usage><subagent_tokens>212205</subagent_tokens><tool_uses>46</tool_uses><duration_ms>360873</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bc715xikl</task-id>
+<tool-use-id>toolu_015gGdLDPd9mxaxV89D454QK</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/bc715xikl.output</output-file>
+<status>completed</status>
+<summary>Background command "Run the extension-host test suites" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bwr492tny</task-id>
+<tool-use-id>toolu_01DYbZSRD9KCQCxDVDMicynU</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/bwr492tny.output</output-file>
+<status>completed</status>
+<summary>Background command "Re-run the full check and host tests on the final tree" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+show me the extension running
+
+---
+
+<task-notification>
+<task-id>bulgon568</task-id>
+<tool-use-id>toolu_01PUroBKu9NyyPAbM5KEKQoy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/bulgon568.output</output-file>
+<status>failed</status>
+<summary>Background command "Restart the VS Code driver server" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bnlvmalvq</task-id>
+<tool-use-id>toolu_01Y7gVhFoX1BJFQsRqYvq5ch</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/bnlvmalvq.output</output-file>
+<status>failed</status>
+<summary>Background command "Start the VS Code driver server" failed with exit code 143</summary>
+</task-notification>
+
+---
+
+close the demo and prepare the branch for push
+
+---
+
+<task-notification>
+<task-id>beuoeuymy</task-id>
+<tool-use-id>toolu_01Ly5xYJqU2BJtqqV7AhHddQ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-abhi-Documents-entire-vscode/105d1dcd-1b59-46e6-881c-455700482a5e/tasks/beuoeuymy.output</output-file>
+<status>failed</status>
+<summary>Background command "Start the updated VS Code driver server" failed with exit code 144</summary>
+</task-notification>

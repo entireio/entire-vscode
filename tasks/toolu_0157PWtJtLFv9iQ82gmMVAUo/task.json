@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_0157PWtJtLFv9iQ82gmMVAUo",
+  "agent_id": "a7f83e1cb5fbbdbfa",
+  "subagent_type": "Explore",
+  "task_description": "Explore setup and brain state",
+  "token_usage": {
+    "input_tokens": 48,
+    "cache_creation_tokens": 147663,
+    "cache_read_tokens": 2366256,
+    "output_tokens": 13324,
+    "api_call_count": 24
+  },
+  "started_at": "2026-11-18T16:49:37.05708+07:00",
+  "completed_at": "2026-11-18T16:51:52.043015+07:00"
+}

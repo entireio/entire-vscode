@@ -1,0 +1,15 @@
+{
+  "tool_use_id": "toolu_01FBQgmf56qTJwjN4epy7mJg",
+  "agent_id": "aa49899294d160870",
+  "subagent_type": "Plan",
+  "task_description": "Review plan against source",
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 205353,
+    "cache_read_tokens": 5076073,
+    "output_tokens": 34750,
+    "api_call_count": 36
+  },
+  "started_at": "2026-11-18T17:01:49.203565+07:00",
+  "completed_at": "2026-11-18T17:07:49.975094+07:00"
+}
