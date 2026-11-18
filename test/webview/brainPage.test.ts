@@ -90,6 +90,7 @@ describe('brainPageHtml', () => {
       'pluginMissing',
       'entire plugin install brain',
       [
+        ['Run in Terminal', 'entire.runSetupStep'],
         ['Copy Command', 'entire.copyBrainInstallCommand'],
         ['Retry', 'entire.refresh'],
       ],
@@ -98,6 +99,7 @@ describe('brainPageHtml', () => {
       'noBrain',
       'entire brain setup',
       [
+        ['Run in Terminal', 'entire.runSetupStep'],
         ['Copy Command', 'entire.copyBrainSetupCommand'],
         ['Retry', 'entire.refresh'],
       ],
@@ -119,10 +121,22 @@ describe('brainPageHtml', () => {
     expect(doc.querySelector('dl')).toBeNull();
   });
 
-  it('does not run a command to install the plugin or build a brain: it copies one', () => {
+  it('runs the command that installs the plugin or builds a brain only through a Setup step, for its own repository', () => {
+    expect(buttons(page([section({ state: 'pluginMissing', details: [] })]))[0]).toEqual({
+      label: 'Run in Terminal',
+      command: 'entire.runSetupStep',
+      args: ['/repos/widget', 'installBrain'],
+    });
+    expect(buttons(page([section({ state: 'noBrain', details: [] })]))[0]).toEqual({
+      label: 'Run in Terminal',
+      command: 'entire.runSetupStep',
+      args: ['/repos/widget', 'setupBrain'],
+    });
     for (const state of ['pluginMissing', 'noBrain'] as const) {
       const commands = buttons(page([section({ state, details: [] })])).map(({ command }) => command);
-      expect(commands.every((command) => command.startsWith('entire.copy') || command === 'entire.refresh')).toBe(true);
+      expect(
+        commands.every((command) => command === 'entire.runSetupStep' || command.startsWith('entire.copy') || command === 'entire.refresh'),
+      ).toBe(true);
     }
   });
 

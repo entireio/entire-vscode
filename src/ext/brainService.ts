@@ -46,8 +46,8 @@ interface Running {
  * (`frame-ancestors 'none'`). The server runs until it is stopped, so this
  * owns one per repository and stops them all when the window closes.
  *
- * Nothing here installs the plugin or builds a brain: both write, and the
- * extension only reads.
+ * Nothing here installs the plugin or builds a brain. Both write, so they
+ * run as Setup steps, in a terminal, when the user asks (see SetupService).
  */
 export class BrainService implements vscode.Disposable {
   /**

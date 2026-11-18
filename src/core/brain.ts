@@ -232,11 +232,14 @@ export function parseVizUrl(line: string): string | undefined {
 }
 
 /**
- * Whether the CLI's complaint means the entire-brain plugin is not installed.
- * Without the plugin, `brain` is not a command the CLI knows: it prints
- * `unknown command "brain …"`, and newer versions name the plugin and how to
- * install it.
+ * Whether the CLI's complaint means a plugin, entire-brain by default, is not
+ * installed. Without the plugin, its name is not a command the CLI knows: it
+ * prints `unknown command "brain …"`, and newer versions name the plugin and
+ * how to install it.
  */
-export function isPluginMissing(output: string): boolean {
-  return /unknown command "brain\b|entire-brain plugin is not installed|entire plugin install brain/i.test(output);
+export function isPluginMissing(output: string, plugin: 'brain' | 'graph' = 'brain'): boolean {
+  return new RegExp(
+    `unknown command "${plugin}\\b|entire-${plugin} plugin is not installed|entire plugin install ${plugin}\\b`,
+    'i',
+  ).test(output);
 }

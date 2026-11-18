@@ -65,6 +65,12 @@
     "views": {
       "entire": [
         {
+          "id": "entire.setup",
+          "name": "Setup",
+          "type": "webview",
+          "when": "entire.showSetup"
+        },
+        {
           "id": "entire.checkpoints",
           "name": "Checkpoints"
         },
@@ -109,32 +115,32 @@
       },
       {
         "view": "entire.checkpoints",
-        "contents": "The Entire CLI is not installed, or it is not on your PATH. This extension reads checkpoints and sessions through it.\n[Install Entire CLI](command:entire.installCli)\n[Set Entire CLI Path](command:entire.setCliPath)\n[Retry](command:entire.refresh)",
+        "contents": "The Entire CLI is not installed, or it is not on your PATH. This extension reads checkpoints and sessions through it.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'cliMissing'"
       },
       {
         "view": "entire.sessions",
-        "contents": "The Entire CLI is not installed, or it is not on your PATH.\n[Install Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "contents": "The Entire CLI is not installed, or it is not on your PATH.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'cliMissing'"
       },
       {
         "view": "entire.checkpoints",
-        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Update Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'cliTooOld'"
       },
       {
         "view": "entire.sessions",
-        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Update Entire CLI](command:entire.installCli)\n[Retry](command:entire.refresh)",
+        "contents": "This extension needs Entire CLI 0.12.0 or later.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'cliTooOld'"
       },
       {
         "view": "entire.checkpoints",
-        "contents": "Entire is not enabled in this repository. Run \"entire enable\" in a terminal to start recording sessions.\n[Copy Command](command:entire.copyEnableCommand)\n[Retry](command:entire.refresh)",
+        "contents": "Entire is not enabled in this repository. Enable it to record agent sessions as checkpoints on your commits.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'notEnabled'"
       },
       {
         "view": "entire.sessions",
-        "contents": "Entire is not enabled in this repository.\n[Copy Command](command:entire.copyEnableCommand)\n[Retry](command:entire.refresh)",
+        "contents": "Entire is not enabled in this repository.\n[Set Up Entire](command:entire.openSetup)\n[Retry](command:entire.refresh)",
         "when": "entire.viewState == 'notEnabled'"
       },
       {
@@ -191,6 +197,30 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "entire.search",
+        "title": "Search",
+        "category": "Entire",
+        "icon": "$(search)"
+      },
+      {
+        "command": "entire.searchCheckpoints",
+        "title": "Search Checkpoints",
+        "category": "Entire",
+        "icon": "$(search)"
+      },
+      {
+        "command": "entire.searchSessions",
+        "title": "Search Sessions",
+        "category": "Entire",
+        "icon": "$(search)"
+      },
+      {
+        "command": "entire.searchTrails",
+        "title": "Search Trails",
+        "category": "Entire",
+        "icon": "$(search)"
+      },
+      {
         "command": "entire.openBrainGraph",
         "title": "View Brain",
         "category": "Entire",
@@ -213,6 +243,27 @@
       {
         "command": "entire.copyBrainSetupCommand",
         "title": "Copy Brain Setup Command",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.openSetup",
+        "title": "Set Up Entire",
+        "category": "Entire",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "entire.runSetupStep",
+        "title": "Run Setup Step",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.checkSetup",
+        "title": "Check Setup Again",
+        "category": "Entire"
+      },
+      {
+        "command": "entire.hideSetup",
+        "title": "Hide Setup",
         "category": "Entire"
       },
       {
@@ -308,6 +359,21 @@
     "menus": {
       "view/title": [
         {
+          "command": "entire.searchCheckpoints",
+          "when": "view == entire.checkpoints && entire.viewState == 'ready'",
+          "group": "navigation@0"
+        },
+        {
+          "command": "entire.searchSessions",
+          "when": "view == entire.sessions && entire.viewState == 'ready'",
+          "group": "navigation@0"
+        },
+        {
+          "command": "entire.searchTrails",
+          "when": "view == entire.trails",
+          "group": "navigation@0"
+        },
+        {
           "command": "entire.openBrainGraph",
           "when": "view == entire.brain",
           "group": "navigation@0"
@@ -326,6 +392,11 @@
           "command": "entire.openRepoOnWeb",
           "when": "(view == entire.checkpoints || view == entire.sessions || view == entire.trails) && entire.hasWebRepo",
           "group": "navigation@3"
+        },
+        {
+          "command": "entire.openSetup",
+          "when": "view == entire.checkpoints",
+          "group": "9_setup@1"
         }
       ],
       "view/item/context": [
@@ -447,6 +518,30 @@
         {
           "command": "entire.filterTrails",
           "when": "entire.hasTrails"
+        },
+        {
+          "command": "entire.searchCheckpoints",
+          "when": "false"
+        },
+        {
+          "command": "entire.searchSessions",
+          "when": "false"
+        },
+        {
+          "command": "entire.searchTrails",
+          "when": "false"
+        },
+        {
+          "command": "entire.runSetupStep",
+          "when": "false"
+        },
+        {
+          "command": "entire.checkSetup",
+          "when": "false"
+        },
+        {
+          "command": "entire.hideSetup",
+          "when": "false"
         }
       ]
     },
@@ -463,6 +558,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Load the next 50 rows of a list when you scroll to its end. When off, click **Load More** to load them."
+        },
+        "entire.search.hosted": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also search with Entire's search service, which ranks the checkpoints, commits, and sessions it holds for a repository whose `origin` remote uses the `entire://` scheme. It reads Entire over the network, with the login that `entire login` saved. When off, Search matches only what the views have read."
         },
         "entire.trails.enabled": {
           "type": "boolean",
