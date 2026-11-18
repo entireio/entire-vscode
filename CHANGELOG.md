@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- The extension's homepage is https://entire.com, so its Open VSX listing links to the Entire website.
+
 ## 0.1.0
 
 Initial release.
