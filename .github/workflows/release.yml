@@ -1,7 +1,8 @@
 name: Release
 
 # Push a tag named v<version> to build the extension once and publish that one
-# file to the Visual Studio Marketplace and to Open VSX.
+# file to the Visual Studio Marketplace, to Open VSX, and to a GitHub release for
+# the tag.
 #
 # Marketplace: GitHub Trusted Publishing, so no secret is stored. The publisher
 # needs a Trusted Publishing policy that names this repository, this workflow
@@ -45,6 +46,30 @@ jobs:
           name: entire-vscode-vsix
           path: '*.vsix'
           if-no-files-found: error
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # Lets the job create the release and upload the VSIX to it.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: entire-vscode-vsix
+      - name: Attach the VSIX to the release for the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The release notes are the CHANGELOG.md entry for this version.
+          awk -v heading="## ${version}" '$0 == heading { found = 1; next } found && /^## / { exit } found' CHANGELOG.md > notes.md
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" entire-*.vsix --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" entire-*.vsix --verify-tag --title "Entire for VS Code ${version}" --notes-file notes.md
+          fi
 
   publish-marketplace:
     needs: build
